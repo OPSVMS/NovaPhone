@@ -161,6 +161,22 @@ export const smsMessages = pgTable("sms_messages", {
   receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("sms_number_idx").on(t.numberId, t.receivedAt), uniqueIndex("sms_external_idx").on(t.externalId)]);
 
+/** Registro de llamadas a números NovaPhone (se llena cuando hay un servicio de voz SIP conectado). */
+export const callLogs = pgTable("call_logs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  numberId: uuid("number_id").notNull().references(() => phoneNumbers.id),
+  userId: uuid("user_id").references(() => users.id),
+  fromNumber: text("from_number").notNull(),
+  toNumber: text("to_number").notNull(),
+  direction: text("direction").$type<"inbound" | "outbound">().notNull().default("inbound"),
+  status: text("status").$type<"answered" | "missed" | "voicemail" | "rejected">().notNull().default("missed"),
+  durationSec: integer("duration_sec").notNull().default(0),
+  /** Transcripción (p. ej. código de verificación dictado por llamada). */
+  transcript: text("transcript"),
+  externalId: text("external_id"),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("calls_number_idx").on(t.numberId, t.startedAt), uniqueIndex("calls_external_idx").on(t.externalId)]);
+
 /** Eventos de webhooks ya procesados (deduplicación por notifyId). */
 export const webhookEvents = pgTable("webhook_events", {
   id: text("id").primaryKey(),
@@ -182,3 +198,4 @@ export type Deposit = typeof deposits.$inferSelect;
 export type Topup = typeof topups.$inferSelect;
 export type PhoneNumber = typeof phoneNumbers.$inferSelect;
 export type SmsMessage = typeof smsMessages.$inferSelect;
+export type CallLog = typeof callLogs.$inferSelect;

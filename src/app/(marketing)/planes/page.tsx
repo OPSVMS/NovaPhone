@@ -12,6 +12,8 @@ import { FaqSection } from "@/components/marketing/faq-section";
 import { PlanCard } from "@/components/marketing/plan-card";
 import { getMarketingPlans, type MarketingPlan } from "@/components/marketing/plans-data";
 import { PlansTable } from "@/components/marketing/plans-table";
+import { NumberAddonCard } from "@/components/marketing/number-section";
+import { NUMBER_PRICE_MXN } from "@/lib/numbers";
 
 export const revalidate = 3600;
 
@@ -93,6 +95,9 @@ export default async function PlanesPage() {
         <div className="flex flex-col gap-14 sm:gap-20">
           <PlanGroup id="planes-mes" title="Para todo el mes" description="30 días de vigencia" plans={monthly} />
           <PlanGroup id="planes-cortos" title="Para unos días" description="Vigencias cortas, ideales como respaldo" plans={short} />
+          <FadeIn>
+            <NumberAddonCard priceMxn={NUMBER_PRICE_MXN()} />
+          </FadeIn>
         </div>
       </Section>
 
@@ -121,8 +126,8 @@ export default async function PlanesPage() {
                 ))}
               </ul>
               <p className="mt-6 border-t border-border pt-5 text-sm leading-relaxed text-muted">
-                Es una eSIM <span className="text-fg">solo de datos</span>: no incluye número ni SMS. Recuerda activar
-                “Roaming de datos” en la línea NovaPhone.
+                Es una eSIM <span className="text-fg">solo de datos</span>: no incluye número ni SMS (para eso está el
+                complemento Número NovaPhone). Recuerda activar “Roaming de datos” en la línea NovaPhone.
               </p>
             </div>
           </FadeIn>

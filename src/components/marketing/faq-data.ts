@@ -3,7 +3,7 @@ export type FaqItem = { q: string; a: string };
 const ALL = {
   que: {
     q: "¿Qué es una eSIM de datos?",
-    a: "Es una SIM digital que se instala en tu teléfono sin chip físico. La de NovaPhone es solo de datos: te da internet móvil en México, pero no incluye número telefónico ni SMS.",
+    a: "Es una SIM digital que se instala en tu teléfono sin chip físico. La de NovaPhone es solo de datos: te da internet móvil en México, pero no incluye número telefónico ni SMS. Si necesitas recibir códigos por SMS, puedes agregar un Número NovaPhone.",
   },
   red: {
     q: "¿Qué red usa y qué velocidad tiene?",
@@ -57,6 +57,18 @@ const ALL = {
     q: "¿Mi teléfono es compatible?",
     a: "Necesitas un equipo con eSIM y desbloqueado: iPhone XS o posterior, Google Pixel 3 o posterior, Samsung Galaxy S20 o posterior, entre muchos otros. En Android, marca *#06#: si aparece un EID, es compatible.",
   },
+  numero: {
+    q: "¿Qué es el número NovaPhone?",
+    a: "Es un número móvil del Reino Unido (+44) que activas desde tu panel para recibir SMS y códigos de verificación. Los mensajes llegan al instante a tu panel y a tu correo. Se paga con tu saldo, se renueva cada 30 días y lo cancelas cuando quieras. Funciona con o sin eSIM.",
+  },
+  whatsapp: {
+    q: "¿Sirve para WhatsApp?",
+    a: "Sí. Al registrarte en WhatsApp, Telegram u otra app, elige Reino Unido (+44), escribe tu número y el código aparecerá en tu panel. Ten en cuenta que algunas apps o bancos no aceptan números virtuales.",
+  },
+  llamadas: {
+    q: "¿Puedo recibir llamadas?",
+    a: "Muy pronto. Por ahora el número recibe SMS y códigos de verificación. Si una app te ofrece verificar por llamada, elige la opción de SMS.",
+  },
 } satisfies Record<string, FaqItem>;
 
 export const FAQ: FaqItem[] = [
@@ -74,6 +86,9 @@ export const FAQ: FaqItem[] = [
   ALL.cancelar,
   ALL.dualsim,
   ALL.compat,
+  ALL.numero,
+  ALL.whatsapp,
+  ALL.llamadas,
 ];
 
 /** Shorter set for /planes, focused on buying and recharging. */
@@ -84,4 +99,5 @@ export const PLANES_FAQ: FaqItem[] = [
   ALL.autoRecarga,
   ALL.cancelar,
   ALL.roaming,
+  ALL.numero,
 ];

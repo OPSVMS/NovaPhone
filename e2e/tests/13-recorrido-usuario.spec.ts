@@ -23,8 +23,9 @@ test("recorrido completo del usuario sin errores", async ({ page, request }, tes
   };
   const nav = (p: Page, label: string) => p.getByRole("link", { name: label, exact: true }).filter({ visible: true }).first();
 
-  // 1. Landing y registro desde el CTA.
+  // 1. Landing (incluye la oferta del número) y registro desde el CTA.
   await page.goto("/");
+  await expect(page.getByText(/Tu número para verificar apps/).first()).toBeVisible();
   await snap("landing");
   await page.getByRole("link", { name: /Crear cuenta/ }).filter({ visible: true }).first().click();
   await expect(page).toHaveURL(/\/registro/);
@@ -79,12 +80,23 @@ test("recorrido completo del usuario sin errores", async ({ page, request }, tes
   await snap("numero-sin");
   await page.getByRole("button", { name: /Obtener mi número/ }).click();
   await page.getByRole("dialog").getByRole("button", { name: /Pagar \$79/ }).click();
-  await expect(page.getByText(/Aún no recibes mensajes/)).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText(/Aún no tienes mensajes/)).toBeVisible({ timeout: 20_000 });
   const [{ e164 }] = await dbQuery<{ e164: string }>("select p.e164 from phone_numbers p join users u on u.id = p.user_id where u.email = $1", [email]);
   await request.post(`/api/webhooks/sms/cloudnumbering?token=${process.env.SMS_WEBHOOK_TOKEN}`, {
     data: { to: e164, from: "WhatsApp", content: `Tu código de WhatsApp: 731-904 ${Date.now()}`, country: "GB", parts: 1 },
   });
   await expect(page.getByText("731-904").filter({ visible: true }).first()).toBeVisible({ timeout: 15_000 });
+  // El remitente alfanumérico se muestra tal cual (no como "—").
+  await expect(page.getByRole("region", { name: "Mensajes" }).getByText("WhatsApp", { exact: true }).first()).toBeVisible();
+  // Llamadas: vacío amigable y luego una llamada registrada por el servicio de voz.
+  await page.getByRole("radio", { name: /Llamadas/ }).click();
+  await expect(page.getByText(/aparecerán aquí muy pronto/)).toBeVisible();
+  const call = await request.post(`/api/webhooks/calls/sip?token=${process.env.SMS_WEBHOOK_TOKEN}`, {
+    data: { to: e164, from: "+14155550123", status: "answered", duration: 80, transcript: "Tu código de verificación es 4 4 2 1 9 0", id: `c-${Date.now()}` },
+  });
+  expect((await call.json()).result).toBe("stored");
+  await expect(page.getByText(/1 min 20 s/).filter({ visible: true }).first()).toBeVisible({ timeout: 15_000 });
+  await page.getByRole("radio", { name: /Mensajes/ }).click();
   const sw = page.getByRole("switch").first();
   await sw.click();
   await expect(sw).toHaveAttribute("aria-checked", "false");
@@ -104,6 +116,9 @@ test("recorrido completo del usuario sin errores", async ({ page, request }, tes
   // Saldo final: 1000 − 189 − 39 − 79 = 693
   await nav(page, "Inicio").click();
   await expect(page.getByText("$693").filter({ visible: true }).first()).toBeVisible();
+  // Inicio muestra el número activo con el último código.
+  await expect(page.getByText("Tu número").filter({ visible: true }).first()).toBeVisible();
+  await expect(page.getByText(/731[\s-]?904/).filter({ visible: true }).first()).toBeVisible();
   await snap("inicio-final");
 
   // 7. Cerrar sesión y volver a entrar.

@@ -5,9 +5,11 @@ import { CtaBand } from "@/components/marketing/cta-band";
 import { FaqSection } from "@/components/marketing/faq-section";
 import { Hero } from "@/components/marketing/hero";
 import { HowItWorks } from "@/components/marketing/how-it-works";
+import { NumberSection } from "@/components/marketing/number-section";
 import { getMarketingPlans, pickHighlights } from "@/components/marketing/plans-data";
 import { PlansSection } from "@/components/marketing/plans-section";
 import { ValueProps } from "@/components/marketing/value-props";
+import { NUMBER_PRICE_MXN } from "@/lib/numbers";
 
 export const revalidate = 3600;
 
@@ -27,6 +29,7 @@ export default async function HomePage() {
       <ValueProps />
       <PlansSection plans={pickHighlights(plans)} total={plans.length} />
       <AlwaysConnected />
+      <NumberSection priceMxn={NUMBER_PRICE_MXN()} />
       <HowItWorks />
       <Compatibility />
       <FaqSection />

@@ -39,7 +39,7 @@ test("número NovaPhone: inventario (admin) → compra → SMS con código en la
   );
   expect(n.status).toBe("assigned");
   await page.reload();
-  await expect(page.getByText(/Aún no recibes mensajes/)).toBeVisible();
+  await expect(page.getByText(/Aún no tienes mensajes/)).toBeVisible();
 
   // SMS entrante por webhook → aparece en la bandeja con el código destacado.
   expect((await smsHook(request, { to: n.e164, from: "WhatsApp", text: "x" }, "bad")).status()).toBe(401);
@@ -67,7 +67,7 @@ test("número NovaPhone: inventario (admin) → compra → SMS con código en la
   await assign.getByRole("button", { name: /Asignar número/ }).click();
   await expect(admin.getByText(/asignado a/)).toBeVisible();
   await admin.goto("/app/numero");
-  await expect(admin.getByText(/Aún no recibes mensajes/)).toBeVisible();
+  await expect(admin.getByText(/Aún no tienes mensajes/)).toBeVisible();
 
   // Apagar la renovación libera el número al vencer, con periodo de espera.
   await page.goto("/app/numero");

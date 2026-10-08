@@ -29,6 +29,13 @@
       "when": 1791447762423,
       "tag": "0003_numbers_card_novacore",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791450217645,
+      "tag": "0004_call_logs",
+      "breakpoints": true
     }
   ]
 }

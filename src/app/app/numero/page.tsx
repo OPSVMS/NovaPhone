@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { CalendarClock, Check, Info, Mail, MessageSquareText, ShieldCheck } from "lucide-react";
 import { requireUser } from "@/lib/session";
-import { canSellNumber, getMessages, getUserNumber, NUMBER_PRICE_MXN } from "@/lib/numbers";
+import { canSellNumber, getUserNumber, NUMBER_PRICE_MXN } from "@/lib/numbers";
 import { getUserOrders } from "@/lib/orders";
 import { formatMxn } from "@/lib/pricing";
 import type { Order } from "@/db/schema";
@@ -15,7 +15,8 @@ import { Aurora } from "@/components/motion/aurora";
 import { PageHeader } from "@/components/app/page-header";
 import { NumberStatusBadge } from "@/components/app/status-badges";
 import { NumberBuy, NumberSettings, type EsimOption } from "@/components/app/number-panels";
-import { SmsInbox } from "@/components/app/sms-inbox";
+import { CommsHub } from "@/components/app/sms-inbox";
+import { getCommsHistory } from "@/app/api/numero/history";
 import { formatDate, formatPhone, topUpAmountMxn } from "@/components/app/format";
 
 export const metadata: Metadata = { title: "Mi número" };
@@ -38,14 +39,14 @@ export default async function NumberPage() {
     return <NoNumber priceCents={priceCents} balanceCents={user.balanceCents} esims={esims} soldOut={available === 0} />;
   }
 
-  const messages = await getMessages(number.id, user.id);
+  const history = await getCommsHistory(number.id, user.id);
   const priceCents = number.monthlyPriceCents ?? NUMBER_PRICE_MXN() * 100;
   const esims = orders.filter((o) => o.status === "ready" || o.id === number.orderId).map(esimOption);
   const linked = orders.find((o) => o.id === number.orderId);
 
   return (
     <div className="flex flex-col gap-6 sm:gap-8">
-      <PageHeader title="Mi número" description="Recibe SMS y códigos de verificación en tu número del Reino Unido." />
+      <PageHeader title="Mi número" description="Tus mensajes y llamadas en un solo lugar." />
 
       {number.graceUntil ? (
         <Alert
@@ -97,11 +98,7 @@ export default async function NumberPage() {
         </section>
       </FadeIn>
 
-      <SmsInbox
-        e164={number.e164}
-        initialNow={new Date().getTime()}
-        initial={messages.map((m) => ({ id: m.id, from: m.fromNumber, body: m.body, receivedAt: m.receivedAt.toISOString() }))}
-      />
+      <CommsHub e164={number.e164} initial={history} initialNow={new Date().getTime()} />
 
       <NumberSettings
         autoRenew={number.autoRenew}
@@ -113,7 +110,7 @@ export default async function NumberPage() {
 
       <p className="flex items-start gap-2 text-[13px] leading-relaxed text-subtle">
         <Info aria-hidden className="mt-0.5 size-3.5 shrink-0" />
-        Algunas apps o bancos pueden no aceptar números virtuales; recomendamos usar “Llamarme” si el SMS no llega.
+        Algunas apps o bancos pueden no aceptar números virtuales. Si el código no llega, pide que lo reenvíen por SMS.
       </p>
     </div>
   );
@@ -202,7 +199,8 @@ function NoNumber({
       </div>
 
       <Alert variant="info" icon={<ShieldCheck aria-hidden />} title="Antes de comprar">
-        Algunas apps o bancos pueden no aceptar números virtuales; recomendamos usar “Llamarme” si el SMS no llega.
+        Por ahora el número recibe SMS y códigos; las llamadas llegan muy pronto. Algunas apps o bancos pueden no aceptar
+        números virtuales.
       </Alert>
     </div>
   );

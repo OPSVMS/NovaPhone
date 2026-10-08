@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/session";
 import { getUserOrders } from "@/lib/orders";
 import { getActivePlans } from "@/lib/catalog";
 import { getLedger } from "@/lib/queries";
+import { getNumberSummary, NUMBER_PRICE_MXN } from "@/lib/numbers";
 import { formatMxn } from "@/lib/pricing";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -13,13 +14,19 @@ import { FadeIn } from "@/components/motion/fade-in";
 import { Stagger, StaggerItem } from "@/components/motion/stagger";
 import { EsimSummaryCard } from "@/components/app/esim-summary-card";
 import { LedgerRow } from "@/components/app/ledger-row";
+import { NumberHomeCard, NumberPromoCard } from "@/components/app/number-home-card";
 import { daysLeft, firstName, greeting } from "@/components/app/format";
 
 export const metadata: Metadata = { title: "Inicio" };
 
 export default async function DashboardPage() {
   const user = await requireUser();
-  const [orders, ledger, plans] = await Promise.all([getUserOrders(user.id), getLedger(user.id, 5), getActivePlans()]);
+  const [orders, ledger, plans, numberSummary] = await Promise.all([
+    getUserOrders(user.id),
+    getLedger(user.id, 5),
+    getActivePlans(),
+    getNumberSummary(user.id),
+  ]);
   const now = new Date().getTime();
 
   const active = orders
@@ -169,6 +176,25 @@ export default async function DashboardPage() {
           </Stagger>
         </section>
       ) : null}
+
+      {/* NovaPhone number */}
+      {numberSummary ? (
+        <section aria-labelledby="your-number" className="flex flex-col gap-4">
+          <h2 id="your-number" className="text-lg font-semibold text-fg">
+            Tu número
+          </h2>
+          <FadeIn immediate delay={0.12} className="grid gap-4 sm:grid-cols-2">
+            <NumberHomeCard
+              number={numberSummary.number}
+              latest={numberSummary.messages[0]}
+              total={numberSummary.total}
+              now={now}
+            />
+          </FadeIn>
+        </section>
+      ) : (
+        <NumberPromoCard priceLabel={formatMxn(NUMBER_PRICE_MXN() * 100)} />
+      )}
 
       {/* Recent activity */}
       {ledger.length > 0 ? (

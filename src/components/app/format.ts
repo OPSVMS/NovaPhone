@@ -53,8 +53,11 @@ export function safeNext(v: unknown) {
 
 /** "+447700900123" → "+44 7700 900123" (UK); otros países en bloques legibles. */
 export function formatPhone(e164: string | null | undefined) {
-  const raw = (e164 ?? "").replace(/[^\d+]/g, "");
-  if (!raw) return "—";
+  const original = (e164 ?? "").trim();
+  // Remitentes alfanuméricos ("WhatsApp", "BBVA") se muestran tal cual.
+  if (/[a-z]/i.test(original)) return original;
+  const raw = original.replace(/[^\d+]/g, "");
+  if (!raw) return original || "—";
   const uk = raw.match(/^\+44(\d{4})(\d{6})$/);
   if (uk) return `+44 ${uk[1]} ${uk[2]}`;
   const us = raw.match(/^\+1(\d{3})(\d{3})(\d{4})$/);
@@ -89,4 +92,33 @@ export function extractCode(body: string) {
   if (split) return `${split[1]}${split[2]}`;
   const plain = body.match(/(?<![\d+])(\d{4,8})(?!\d)/);
   return plain ? plain[1] : null;
+}
+
+/** Clave de día en hora de CDMX ("2026-10-08"), para agrupar por día. */
+export function dayKey(d: Date | string | number) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(d));
+}
+
+/** "Hoy", "Ayer" o "Lunes 6 de octubre" respecto a `now`. */
+export function dayLabel(d: Date | string, now: number) {
+  const key = dayKey(d);
+  if (key === dayKey(now)) return "Hoy";
+  if (key === dayKey(now - 86_400_000)) return "Ayer";
+  const sameYear = key.slice(0, 4) === dayKey(now).slice(0, 4);
+  const label = formatDate(d, { weekday: "long", day: "numeric", month: "long", ...(sameYear ? {} : { year: "numeric" }) });
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+/** "14:05" (hora de CDMX). */
+export function clockTime(d: Date | string) {
+  return formatDate(d, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+}
+
+/** 80 → "1 min 20 s"; 45 → "45 s"; 120 → "2 min". */
+export function formatDuration(totalSec: number) {
+  const s = Math.max(0, Math.round(totalSec));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  if (!m) return `${r} s`;
+  return r ? `${m} min ${r} s` : `${m} min`;
 }

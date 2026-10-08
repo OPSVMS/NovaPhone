@@ -214,3 +214,53 @@ export async function listInventory() {
 export async function recentSms(limit = 30) {
   return db.query.smsMessages.findMany({ orderBy: desc(schema.smsMessages.receivedAt), limit });
 }
+
+export async function getCalls(numberId: string, userId: string, limit = 50) {
+  return db.query.callLogs.findMany({
+    where: and(eq(schema.callLogs.numberId, numberId), eq(schema.callLogs.userId, userId)),
+    orderBy: desc(schema.callLogs.startedAt),
+    limit,
+  });
+}
+
+/** Llamada entrante reportada por el servicio de voz. Idempotente por externalId. */
+export async function storeCall(input: {
+  to: string;
+  from: string;
+  status?: "answered" | "missed" | "voicemail" | "rejected";
+  durationSec?: number;
+  transcript?: string;
+  externalId?: string;
+  startedAt?: Date;
+}) {
+  const to = normalizeE164(input.to);
+  const number = await db.query.phoneNumbers.findFirst({ where: eq(schema.phoneNumbers.e164, to) });
+  if (!number) return { result: "unknown-number" as const };
+  const [row] = await db
+    .insert(schema.callLogs)
+    .values({
+      numberId: number.id,
+      userId: number.userId,
+      fromNumber: input.from,
+      toNumber: to,
+      status: input.status ?? "missed",
+      durationSec: input.durationSec ?? 0,
+      transcript: input.transcript?.slice(0, 2000) ?? null,
+      externalId: input.externalId ?? null,
+      startedAt: input.startedAt ?? new Date(),
+    })
+    .onConflictDoNothing()
+    .returning();
+  return row ? { result: "stored" as const, callId: row.id } : { result: "duplicate" as const };
+}
+
+/** Resumen para el inicio: número activo, mensajes recientes y último código. */
+export async function getNumberSummary(userId: string) {
+  const number = await getUserNumber(userId);
+  if (!number) return null;
+  const [messages, [{ total }]] = await Promise.all([
+    getMessages(number.id, userId, 3),
+    db.select({ total: dsql<number>`count(*)::int` }).from(schema.smsMessages).where(and(eq(schema.smsMessages.numberId, number.id), eq(schema.smsMessages.userId, userId))),
+  ]);
+  return { number, messages, total };
+}
