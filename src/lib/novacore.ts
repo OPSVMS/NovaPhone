@@ -1,6 +1,6 @@
 import "server-only";
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { adjustBalance } from "./wallet";
 import { completeDeposit } from "./deposits";
@@ -70,8 +70,14 @@ export type NovacoreDeposit = {
   payerName?: string;
   concept?: string;
   receivedAt?: string;
-  status?: "completed" | "returned";
+  /** scattered = liquidado · returned = devuelto · pending/pending_confirmation/queued = en proceso · failed/canceled. */
+  status?: string;
 };
+
+/** Estados de NOVACORE: scattered = liquidado (acreditar); returned = devuelto (revertir). */
+const SETTLED = new Set(["scattered", "completed"]);
+const IN_PROGRESS = new Set(["pending", "pending_confirmation", "queued"]);
+const NOT_CREDITED = new Set(["failed", "canceled", "cancelled"]);
 
 /** Verifica la firma del aviso: HMAC-SHA256(CALLBACK_SECRET, "{ts}.{nonce}.{rawBody}") en hex. */
 export function verifyNovacoreSignature(raw: string, ts: string | null, nonce: string | null, sig: string | null) {
@@ -151,7 +157,8 @@ async function reverseReturned(trackingKey: string) {
 /** Conciliación: cubre avisos perdidos y detecta devoluciones. */
 export async function reconcileNovacore(sinceMinutes = 60 * 24) {
   if (!novacoreEnabled()) return { enabled: false };
-  const since = new Date(Date.now() - Math.min(sinceMinutes, 7 * 24 * 60) * 60_000).toISOString();
+  // NOVACORE acepta `since` de máximo 7 días atrás: dejamos 10 min de margen.
+  const since = new Date(Date.now() - Math.min(sinceMinutes, 7 * 24 * 60 - 10) * 60_000).toISOString();
   let cursor: string | undefined;
   let credited = 0;
   let returned = 0;
@@ -162,13 +169,25 @@ export async function reconcileNovacore(sinceMinutes = 60 * 24) {
       "GET",
       `/api/integrations/spei-deposits?${qs}`,
     );
-    if (status !== 200) throw new Error(`NOVACORE reconcile ${status}`);
+    if (status !== 200) throw new Error(`NOVACORE reconcile ${status}: ${JSON.stringify(json).slice(0, 200)}`);
     const rows = json.data ?? json.deposits ?? [];
+    // La consulta trae los depósitos de toda la empresa: solo procesamos CLABEs de clientes NovaPhone.
+    const accounts = [...new Set(rows.map((d) => d.beneficiaryAccount).filter(Boolean))];
+    const ours = accounts.length
+      ? new Set((await db.select({ clabe: schema.users.clabe }).from(schema.users).where(inArray(schema.users.clabe, accounts))).map((u) => u.clabe))
+      : new Set<string | null>();
     for (const d of rows) {
+      if (!ours.has(d.beneficiaryAccount)) continue;
       seen++;
       if (d.status === "returned") {
         if (await reverseReturned(d.trackingKey)) returned++;
-      } else if ((await creditNovacoreDeposit(d, "reconcile")).result === "credited") credited++;
+      } else if (!d.status || SETTLED.has(d.status)) {
+        if ((await creditNovacoreDeposit(d, "reconcile")).result === "credited") credited++;
+      } else if (IN_PROGRESS.has(d.status) || NOT_CREDITED.has(d.status)) {
+        // En proceso: se acreditará en una conciliación posterior. Fallido/cancelado: nada que hacer.
+      } else {
+        console.warn("NOVACORE estado no reconocido", d.status, d.trackingKey);
+      }
     }
     if (!json.nextCursor) break;
     cursor = json.nextCursor;

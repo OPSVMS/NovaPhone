@@ -18,6 +18,9 @@ export async function GET(req: NextRequest) {
   const admins = await db.query.users.findMany({ where: and(isNull(schema.users.clabe), eq(schema.users.role, "admin")), limit: 10 });
   let assigned = 0;
   for (const u of [...pending, ...admins]) if (await ensureClabe(u).catch(() => null)) assigned++;
-  const reconcile = await reconcileNovacore(Number(req.nextUrl.searchParams.get("minutes") ?? 60 * 24));
+  // Cada minuto revisa las últimas 2 h; una vez por hora, 7 días (para detectar devoluciones tardías).
+  const fullSweep = new Date().getUTCMinutes() === 0;
+  const minutes = Number(req.nextUrl.searchParams.get("minutes") ?? (fullSweep ? 7 * 24 * 60 : 120));
+  const reconcile = await reconcileNovacore(minutes);
   return NextResponse.json({ ok: true, assigned, ...reconcile });
 }

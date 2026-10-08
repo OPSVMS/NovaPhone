@@ -156,7 +156,9 @@ http.createServer((req, res) => {
     }
     if (url.pathname === "/api/integrations/spei-deposits" && req.method === "GET") {
       if (!verifyNc(req, "")) { res.statusCode = 401; return res.end(JSON.stringify({ error: "invalid signature" })); }
-      return res.end(JSON.stringify({ data: speiDeposits, nextCursor: null }));
+      // Igual que producción: incluye depósitos de otras CLABEs de la empresa y estado "scattered".
+      const foreign = { trackingKey: "FOREIGN123", amount: "18000.00", beneficiaryAccount: "684180327010000064", status: "scattered", settledAt: null };
+      return res.end(JSON.stringify({ deposits: [foreign, ...speiDeposits.map((d) => ({ ...d, amount: Number(d.amount).toFixed(2), status: d.status === "completed" ? "scattered" : d.status }))], nextCursor: null }));
     }
     // Test: simula un SPEI a una CLABE. send=false → no manda aviso (para probar conciliación).
     if (url.pathname === "/__test/novacore/deposit") {
