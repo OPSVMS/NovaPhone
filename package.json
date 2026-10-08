@@ -9,7 +9,8 @@
     "lint": "eslint",
     "db:push": "drizzle-kit push",
     "catalog:sync": "tsx --conditions=react-server scripts/sync-catalog.mts",
-    "typecheck": "next typegen && tsc --noEmit"
+    "typecheck": "next typegen && tsc --noEmit",
+    "test:e2e": "docker compose -f docker-compose.e2e.yml up --build --abort-on-container-exit --exit-code-from e2e; docker compose -f docker-compose.e2e.yml down -v"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",

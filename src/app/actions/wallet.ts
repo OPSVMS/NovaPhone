@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireUser, requireAdmin } from "@/lib/session";
 import { createDeposit, completeDeposit, MIN_DEPOSIT_MXN, MAX_DEPOSIT_MXN } from "@/lib/deposits";
@@ -44,6 +44,10 @@ export async function adminApproveDeposit(form: FormData) {
 export async function adminCancelDeposit(form: FormData) {
   await requireAdmin();
   const id = String(form.get("depositId") ?? "");
-  await db.update(schema.deposits).set({ status: "cancelled" }).where(eq(schema.deposits.id, id));
+  // Solo depósitos pendientes: nunca marcar como cancelado uno ya acreditado.
+  await db
+    .update(schema.deposits)
+    .set({ status: "cancelled" })
+    .where(and(eq(schema.deposits.id, id), eq(schema.deposits.status, "pending")));
   revalidatePath("/admin");
 }

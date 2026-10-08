@@ -17,7 +17,7 @@ export async function createSession(userId: string) {
   await db.insert(schema.sessions).values({ id: hash(token), userId, expiresAt });
   (await cookies()).set(SESSION_COOKIE, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: (process.env.APP_URL ?? "https:").startsWith("https:"),
     sameSite: "lax",
     path: "/",
     expires: expiresAt,

@@ -22,3 +22,14 @@ pnpm dev
   `POST /api/webhooks/esimaccess?token=ESIMACCESS_WEBHOOK_TOKEN` o por consulta desde la página de la orden. Si falla, se reembolsa.
 - **Precios**: costo USD × tipo de cambio × `PRICE_MARKUP` (1.33), redondeado hacia arriba a un número que termina en 9.
   Cron diario `/api/cron/sync-catalog`.
+
+## Pruebas E2E (Docker)
+
+```bash
+pnpm test:e2e
+```
+
+Levanta Postgres + proxy HTTP tipo Neon + simulador de eSIM Access (`e2e/mock`) + la app compilada + Playwright,
+y corre 19 escenarios en escritorio y móvil: sitio público completo (scroll, menú, FAQ), registro/login/logout,
+depósitos SPEI y USDT por webhook firmado, idempotencia, compra con eSIM lista y QR, saldo insuficiente,
+reembolso automático cuando falla el proveedor, aprobación de depósitos desde admin y protección de la API.

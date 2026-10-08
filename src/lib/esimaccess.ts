@@ -1,6 +1,6 @@
 import "server-only";
 
-const BASE = "https://api.esimaccess.com/api/v1/open";
+const BASE = `${process.env.ESIMACCESS_BASE_URL ?? "https://api.esimaccess.com"}/api/v1/open`;
 
 type ApiResponse<T> = { success: boolean; errorCode: string | null; errorMsg: string | null; obj: T };
 

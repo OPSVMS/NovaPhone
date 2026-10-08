@@ -12,6 +12,8 @@ import { emailEnabled, sendVerificationCode } from "@/lib/email";
 export type FormState = { error?: string; ok?: string } | undefined;
 
 const hashCode = (c: string) => createHash("sha256").update(c).digest("hex");
+/** Solo rutas internas ("/app/..."), nunca "//host" ni URLs absolutas. */
+const safeNext = (v: unknown) => (typeof v === "string" && v.startsWith("/") && !v.startsWith("//") && !v.startsWith("/\\") ? v : null);
 const adminEmails = () => (process.env.ADMIN_EMAILS ?? "").toLowerCase().split(",").map((s) => s.trim()).filter(Boolean);
 
 async function issueCode(userId: string, email: string) {
@@ -30,6 +32,7 @@ export async function register(_: FormState, form: FormData): Promise<FormState>
   const parsed = registerSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const { name, email, password } = parsed.data;
+  const next = safeNext(form.get("next"));
 
   const exists = await db.query.users.findFirst({ where: eq(schema.users.email, email) });
   if (exists) return { error: "Ya existe una cuenta con ese correo." };
@@ -47,9 +50,9 @@ export async function register(_: FormState, form: FormData): Promise<FormState>
     .returning();
 
   await createSession(user.id);
-  if (!emailEnabled()) redirect("/app");
+  if (!emailEnabled()) redirect(next ?? "/app");
   await issueCode(user.id, email);
-  redirect("/verificar");
+  redirect(next ? `/verificar?next=${encodeURIComponent(next)}` : "/verificar");
 }
 
 const loginSchema = z.object({
@@ -65,7 +68,7 @@ export async function login(_: FormState, form: FormData): Promise<FormState> {
   const user = await db.query.users.findFirst({ where: eq(schema.users.email, email) });
   if (!user || !(await bcrypt.compare(password, user.passwordHash))) return { error: "Correo o contraseña incorrectos." };
   await createSession(user.id);
-  redirect(next?.startsWith("/") && !next.startsWith("//") ? next : "/app");
+  redirect(safeNext(next) ?? "/app");
 }
 
 export async function logout() {
@@ -75,8 +78,9 @@ export async function logout() {
 
 export async function verifyEmail(_: FormState, form: FormData): Promise<FormState> {
   const user = await getUser();
+  const next = safeNext(form.get("next")) ?? "/app";
   if (!user) redirect("/entrar");
-  if (user.verified) redirect("/app");
+  if (user.verified) redirect(next);
   const code = String(form.get("code") ?? "").replace(/\D/g, "");
   if (code.length !== 6) return { error: "El código tiene 6 dígitos." };
 
@@ -91,7 +95,7 @@ export async function verifyEmail(_: FormState, form: FormData): Promise<FormSta
   }
   await db.update(schema.emailCodes).set({ usedAt: new Date() }).where(eq(schema.emailCodes.id, row.id));
   await db.update(schema.users).set({ emailVerifiedAt: new Date() }).where(eq(schema.users.id, user.id));
-  redirect("/app");
+  redirect(next);
 }
 
 export async function resendCode(): Promise<FormState> {

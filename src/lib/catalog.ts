@@ -3,7 +3,7 @@ import { db, schema } from "@/db";
 import { eq, notInArray, and, asc } from "drizzle-orm";
 import { listPackages, toUsd } from "./esimaccess";
 import { getUsdMxn } from "./fx";
-import { retailPriceMxn } from "./pricing";
+import { formatGb, retailPriceMxn } from "./pricing";
 
 const COUNTRIES = ["MX"];
 const FEATURED = new Set(["MX_20_30"]);
@@ -23,7 +23,7 @@ export async function syncCatalog() {
         id: p.slug,
         provider: "esimaccess",
         providerCode: p.packageCode,
-        name: p.name,
+        name: `México ${formatGb(Math.round((p.volume / 1024 ** 3) * 10) / 10)} · ${p.duration} días`,
         countryCode: country,
         dataGb: Math.round((p.volume / 1024 ** 3) * 10) / 10,
         days: p.duration,
