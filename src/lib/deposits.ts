@@ -56,3 +56,16 @@ export async function completeDeposit(depositId: string, opts: { externalId?: st
 export async function getUserDeposits(userId: string) {
   return db.query.deposits.findMany({ where: eq(schema.deposits.userId, userId), orderBy: desc(schema.deposits.createdAt), limit: 50 });
 }
+
+/** Depósito SPEI recibido en la CLABE personal de un usuario. Idempotente por externalId (índice único). */
+export async function creditClabeDeposit(clabe: string, amountCents: number, externalId: string, meta: Record<string, unknown>) {
+  const user = await db.query.users.findFirst({ where: eq(schema.users.clabe, clabe) });
+  if (!user) return null;
+  const [dep] = await db
+    .insert(schema.deposits)
+    .values({ userId: user.id, method: "spei", amountCents, reference: `C${Date.now()}${randomInt(100, 999)}`, externalId, meta })
+    .onConflictDoNothing()
+    .returning();
+  if (!dep) return db.query.deposits.findFirst({ where: eq(schema.deposits.externalId, externalId) });
+  return completeDeposit(dep.id, { externalId });
+}

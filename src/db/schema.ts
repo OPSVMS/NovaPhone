@@ -9,8 +9,10 @@ export const users = pgTable("users", {
   emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
   /** Saldo en centavos MXN. */
   balanceCents: integer("balance_cents").notNull().default(0),
+  /** CLABE personal asignada por el core bancario (depósitos SPEI sin referencia). */
+  clabe: text("clabe"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [uniqueIndex("users_email_idx").on(t.email)]);
+}, (t) => [uniqueIndex("users_email_idx").on(t.email), uniqueIndex("users_clabe_idx").on(t.clabe)]);
 
 export const sessions = pgTable("sessions", {
   /** sha256 del token de la cookie. */
@@ -94,11 +96,32 @@ export const orders = pgTable("orders", {
   usedBytes: numeric("used_bytes", { mode: "number" }),
   totalBytes: numeric("total_bytes", { mode: "number" }),
   expiresAt: timestamp("expires_at", { withTimezone: true }),
+  activatedAt: timestamp("activated_at", { withTimezone: true }),
+  usageSyncedAt: timestamp("usage_synced_at", { withTimezone: true }),
+  /** Auto-recarga: plan a aplicar cuando quedan pocos datos o días. */
+  autoTopupPlanId: text("auto_topup_plan_id"),
+  autoTopupLastAt: timestamp("auto_topup_last_at", { withTimezone: true }),
+  lowBalanceNotifiedAt: timestamp("low_balance_notified_at", { withTimezone: true }),
   error: text("error"),
   emailedAt: timestamp("emailed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("orders_user_idx").on(t.userId), index("orders_provider_idx").on(t.providerOrderNo)]);
+
+export const topups = pgTable("topups", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  orderId: uuid("order_id").notNull().references(() => orders.id),
+  userId: uuid("user_id").notNull().references(() => users.id),
+  planId: text("plan_id").notNull(),
+  planName: text("plan_name").notNull(),
+  priceCents: integer("price_cents").notNull(),
+  costUsd: numeric("cost_usd", { mode: "number" }).notNull(),
+  auto: boolean("auto").notNull().default(false),
+  status: text("status").$type<"pending" | "applied" | "refunded">().notNull().default("pending"),
+  providerTxn: text("provider_txn"),
+  error: text("error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("topups_order_idx").on(t.orderId)]);
 
 export const settings = pgTable("settings", {
   key: text("key").primaryKey(),
@@ -110,3 +133,4 @@ export type User = typeof users.$inferSelect;
 export type Plan = typeof plans.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type Deposit = typeof deposits.$inferSelect;
+export type Topup = typeof topups.$inferSelect;

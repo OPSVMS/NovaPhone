@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ChevronRight, ShieldCheck } from "lucide-react";
+import { ChevronRight, Landmark, ShieldCheck } from "lucide-react";
+import { eq } from "drizzle-orm";
+import { db, schema } from "@/db";
+import { CopyField } from "@/components/app/copy-field";
 import { requireUser } from "@/lib/session";
 import { getUserDeposits, MAX_DEPOSIT_MXN, MIN_DEPOSIT_MXN } from "@/lib/deposits";
 import { formatMxn } from "@/lib/pricing";
@@ -15,7 +18,10 @@ export const metadata: Metadata = { title: "Agregar fondos" };
 
 export default async function FundsPage({ searchParams }: PageProps<"/app/fondos">) {
   const [user, sp] = await Promise.all([requireUser(), searchParams]);
-  const deposits = await getUserDeposits(user.id);
+  const [deposits, account] = await Promise.all([
+    getUserDeposits(user.id),
+    db.query.users.findFirst({ where: eq(schema.users.id, user.id), columns: { clabe: true } }),
+  ]);
 
   const monto = Number(typeof sp.monto === "string" ? sp.monto : NaN);
   const defaultAmount =
@@ -28,6 +34,26 @@ export default async function FundsPage({ searchParams }: PageProps<"/app/fondos
         title="Agregar fondos"
         description="Recarga tu saldo y úsalo para comprar planes al instante."
       />
+
+      {account?.clabe ? (
+        <FadeIn immediate>
+          <Card className="flex flex-col gap-4 p-5 sm:p-7">
+            <div className="flex items-start gap-3">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-border bg-surface-2 text-lavender">
+                <Landmark aria-hidden className="size-5" />
+              </span>
+              <div className="flex flex-col gap-1">
+                <h2 className="font-semibold text-fg">Tu CLABE personal</h2>
+                <p className="text-[13px] leading-relaxed text-muted">
+                  Transfiere cualquier monto a esta CLABE y se suma a tu saldo automáticamente, sin referencia. Puedes
+                  programar una transferencia mensual en tu banco y activar la auto-recarga en tu eSIM para nunca quedarte sin datos.
+                </p>
+              </div>
+            </div>
+            <CopyField label="CLABE" value={account.clabe} copyLabel="Copiar CLABE" />
+          </Card>
+        </FadeIn>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_260px] lg:items-start">
         <FadeIn immediate>

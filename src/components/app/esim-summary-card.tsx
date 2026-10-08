@@ -8,7 +8,7 @@ import { daysLeft, formatBytes, formatDate } from "./format";
 
 /** Compact eSIM card used on the dashboard and in the list. */
 export function EsimSummaryCard({ order, now }: { order: Order; now: number }) {
-  const left = daysLeft(order.expiresAt, now);
+  const left = order.activatedAt ? daysLeft(order.expiresAt, now) : null;
   const expired = order.status === "ready" && left === 0;
   const hasUsage = order.status === "ready" && Number(order.totalBytes) > 0;
   const used = Number(order.usedBytes ?? 0);
@@ -47,6 +47,7 @@ export function EsimSummaryCard({ order, now }: { order: Order; now: number }) {
             <span className="text-subtle tabular-nums">de {formatBytes(total)}</span>
           </div>
           <UsageBar used={used} total={total} />
+          {order.autoTopupPlanId ? <p className="text-[12px] text-lavender">Auto-recarga activa</p> : null}
           {left !== null ? (
             <p className="mt-1 inline-flex items-center gap-1.5 text-[13px] text-subtle">
               <CalendarClock aria-hidden className="size-3.5" />

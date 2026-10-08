@@ -53,6 +53,9 @@ services:
       DEPOSITS_WEBHOOK_SECRET: "test-deposit-secret"
       CRON_SECRET: "test-cron-secret"
       ESIMACCESS_WEBHOOK_TOKEN: "test-webhook-token"
+      MOCK_URL: "http://mock:4010"
+      NEON_SQL_URL: "http://neon-proxy:4444/sql"
+      DB_URL: "postgres://postgres:postgres@db.localtest.me:5432/main"
       CI: "1"
     command: ["sh", "-c", "npm ci --no-audit --no-fund && npx playwright test"]
     depends_on: { web: { condition: service_healthy } }

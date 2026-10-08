@@ -53,3 +53,13 @@ export function sendEsimReady(to: string, o: { planName: string; activationCode:
 export function sendDepositCredited(to: string, amount: string) {
   return send(to, `Recibimos tu depósito de ${amount}`, shell("Saldo acreditado", `<p style="color:#b8b2cc;line-height:1.6">Tu depósito de <b style="color:#fff">${amount}</b> ya está disponible en tu saldo NovaPhone.</p>`));
 }
+
+export function sendAutoTopupDone(to: string, planName: string, orderId: string) {
+  const url = `${process.env.APP_URL ?? ""}/app/esims/${orderId}`;
+  return send(to, "Recargamos tu eSIM automáticamente", shell("Auto-recarga aplicada ✦", `<p style="color:#b8b2cc;line-height:1.6">Tu eSIM <b style="color:#fff">${planName}</b> se estaba quedando sin datos o días, así que la recargamos con tu saldo. Sigues conectado sin hacer nada.</p><p><a href="${url}" style="color:#a78bfa">Ver mi eSIM</a></p>`));
+}
+
+export function sendAutoTopupNoFunds(to: string, planName: string, price: string, orderId: string) {
+  const url = `${process.env.APP_URL ?? ""}/app/fondos`;
+  return send(to, "Tu eSIM necesita saldo para recargarse", shell("Agrega saldo para no quedarte sin datos", `<p style="color:#b8b2cc;line-height:1.6">Tu eSIM <b style="color:#fff">${planName}</b> está por terminarse y tienes la auto-recarga activa${price ? ` (${price})` : ""}, pero tu saldo no alcanza.</p><a href="${url}" style="display:block;text-align:center;background:#7652f0;color:#fff;text-decoration:none;padding:14px;border-radius:12px;font-weight:600">Agregar saldo</a><p style="color:#8b84a3;font-size:13px">eSIM: ${process.env.APP_URL ?? ""}/app/esims/${orderId}</p>`));
+}

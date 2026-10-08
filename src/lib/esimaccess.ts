@@ -85,3 +85,25 @@ export async function cancelEsim(esimTranNo: string) {
 export async function saveWebhook(url: string) {
   return call("/webhook/save", { webhook: url });
 }
+
+export type ProviderEsimDetail = ProviderEsim & { activateTime: string | null; totalDuration: number };
+
+/** Estado, consumo y vigencia de una eSIM existente. */
+export async function queryEsim(esimTranNo: string): Promise<ProviderEsimDetail | null> {
+  const obj = await call<{ esimList: ProviderEsimDetail[] }>("/esim/query", { esimTranNo, pager: { pageNum: 1, pageSize: 5 } });
+  return obj.esimList[0] ?? null;
+}
+
+/** Recargas compatibles con una eSIM (slug coincide con el plan base, packageCode es TOPUP_*). */
+export async function listTopupPackages(esimTranNo: string) {
+  const obj = await call<{ packageList: ProviderPackage[] }>("/package/list", { type: "TOPUP", esimTranNo });
+  return obj.packageList;
+}
+
+export async function topupEsim(esimTranNo: string, packageCode: string, transactionId: string) {
+  return call<{ expiredTime: string; totalVolume: number; totalDuration: number; orderUsage: number }>("/esim/topup", {
+    esimTranNo,
+    packageCode,
+    transactionId,
+  });
+}

@@ -73,3 +73,33 @@ export async function buyPlan(page: Page, plan: string, priceLabel: RegExp) {
   await expect(dialog.getByText("Confirma tu compra")).toBeVisible();
   await dialog.getByRole("button", { name: priceLabel }).click();
 }
+
+/** Consulta directa a Postgres vía el proxy HTTP (solo pruebas). */
+export async function dbQuery<T = Record<string, unknown>>(query: string, params: unknown[] = []): Promise<T[]> {
+  const res = await fetch(process.env.NEON_SQL_URL!, {
+    method: "POST",
+    headers: { "Neon-Connection-String": process.env.DB_URL!, "content-type": "application/json" },
+    body: JSON.stringify({ query, params }),
+  });
+  const json = (await res.json()) as { rows?: T[]; message?: string };
+  if (!json.rows) throw new Error(`dbQuery failed: ${JSON.stringify(json)}`);
+  return json.rows;
+}
+
+/** Simula consumo de datos (y activación) en el proveedor simulado. */
+export async function simulateUsage(esimTranNo: string, usedBytes: number) {
+  await fetch(`${process.env.MOCK_URL}/__test/usage`, { method: "POST", body: JSON.stringify({ esimTranNo, usedBytes }) });
+}
+
+export async function fundAccount(page: Page, request: APIRequestContext, amount: number) {
+  const { reference } = await requestDeposit(page, amount);
+  await creditSpei(request, reference, amount);
+}
+
+/** Compra un plan y espera a que la eSIM esté lista. Regresa el id de la orden. */
+export async function buyReadyEsim(page: Page, plan: string, price: RegExp) {
+  await buyPlan(page, plan, price);
+  await page.waitForURL(/\/app\/esims\/[0-9a-f-]{36}/);
+  await expect(page.getByText("Tu eSIM está lista")).toBeVisible({ timeout: 60_000 });
+  return page.url().split("/").pop()!;
+}
