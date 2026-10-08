@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Container } from "@/components/ui/container";
 import { Section, SectionHeader } from "@/components/ui/section";
 import { CtaBand } from "@/components/marketing/cta-band";
-import { FAQ } from "@/components/marketing/faq-data";
+import { PLANES_FAQ } from "@/components/marketing/faq-data";
 import { FaqSection } from "@/components/marketing/faq-section";
 import { PlanCard } from "@/components/marketing/plan-card";
 import { getMarketingPlans, type MarketingPlan } from "@/components/marketing/plans-data";
@@ -27,6 +27,9 @@ const included = [
   "Entrega instantánea por correo y en tu panel",
   "Instalación con QR o con un toque en iPhone (iOS 17.4+)",
   "La vigencia empieza en tu primera conexión",
+  "Recargas en la misma eSIM, sin reinstalar",
+  "Auto-recarga opcional con tu saldo",
+  "Consumo y días restantes en tu panel",
   "Sin contratos ni plazos forzosos",
   "Soporte humano para instalar y resolver dudas",
 ];
@@ -126,7 +129,7 @@ export default async function PlanesPage() {
         </div>
       </Section>
 
-      <FaqSection items={FAQ.slice(0, 6)} />
+      <FaqSection items={PLANES_FAQ} />
       <CtaBand title="Elige tu plan y conéctate hoy." />
     </>
   );

@@ -86,13 +86,16 @@ export const orders = pgTable("orders", {
   planName: text("plan_name").notNull(),
   priceCents: integer("price_cents").notNull(),
   costUsd: numeric("cost_usd", { mode: "number" }).notNull(),
-  status: text("status").$type<"provisioning" | "ready" | "failed" | "refunded">().notNull().default("provisioning"),
+  status: text("status").$type<"provisioning" | "ready" | "failed" | "refunded" | "cancelled">().notNull().default("provisioning"),
   providerOrderNo: text("provider_order_no"),
   esimTranNo: text("esim_tran_no"),
   iccid: text("iccid"),
   activationCode: text("activation_code"),
   apn: text("apn"),
   esimStatus: text("esim_status"),
+  /** Estado del perfil en el teléfono: RELEASED, DOWNLOAD, INSTALLATION, ENABLED, DISABLED, DELETED. */
+  smdpStatus: text("smdp_status"),
+  suspended: boolean("suspended").notNull().default(false),
   usedBytes: numeric("used_bytes", { mode: "number" }),
   totalBytes: numeric("total_bytes", { mode: "number" }),
   expiresAt: timestamp("expires_at", { withTimezone: true }),
@@ -102,6 +105,8 @@ export const orders = pgTable("orders", {
   autoTopupPlanId: text("auto_topup_plan_id"),
   autoTopupLastAt: timestamp("auto_topup_last_at", { withTimezone: true }),
   lowBalanceNotifiedAt: timestamp("low_balance_notified_at", { withTimezone: true }),
+  lowDataNotifiedAt: timestamp("low_data_notified_at", { withTimezone: true }),
+  expiryNotifiedAt: timestamp("expiry_notified_at", { withTimezone: true }),
   error: text("error"),
   emailedAt: timestamp("emailed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -122,6 +127,14 @@ export const topups = pgTable("topups", {
   error: text("error"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("topups_order_idx").on(t.orderId)]);
+
+/** Eventos de webhooks ya procesados (deduplicación por notifyId). */
+export const webhookEvents = pgTable("webhook_events", {
+  id: text("id").primaryKey(),
+  type: text("type").notNull(),
+  payload: jsonb("payload"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 export const settings = pgTable("settings", {
   key: text("key").primaryKey(),

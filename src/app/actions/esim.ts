@@ -26,3 +26,24 @@ export async function autoTopupAction(_: FormState, form: FormData): Promise<For
   revalidatePath(`/app/esims/${orderId}`);
   return { ok: planId ? "Auto-recarga activada." : "Auto-recarga desactivada." };
 }
+
+export async function cancelEsimAction(_: FormState, form: FormData): Promise<FormState> {
+  const user = await requireUser();
+  const order = await getUserOrder(user.id, String(form.get("orderId") ?? ""));
+  if (!order) return { error: "No encontramos esa eSIM." };
+  const { cancelUnused } = await import("@/lib/lifecycle");
+  const res = await cancelUnused(order).catch(() => ({ ok: false as const, error: "No pudimos cancelarla. Intenta de nuevo." }));
+  revalidatePath("/app", "layout");
+  return res.ok ? { ok: "eSIM cancelada. Te devolvimos el saldo." } : { error: res.error };
+}
+
+export async function suspendAction(_: FormState, form: FormData): Promise<FormState> {
+  const user = await requireUser();
+  const order = await getUserOrder(user.id, String(form.get("orderId") ?? ""));
+  if (!order) return { error: "No encontramos esa eSIM." };
+  const suspend = form.get("suspend") === "1";
+  const { setSuspended } = await import("@/lib/lifecycle");
+  const res = await setSuspended(order, suspend).catch(() => ({ ok: false as const, error: "No pudimos cambiar el estado. Intenta de nuevo." }));
+  revalidatePath(`/app/esims/${order.id}`);
+  return res.ok ? { ok: suspend ? "eSIM en pausa. No consumirá datos." : "eSIM reactivada." } : { error: res.error };
+}

@@ -1,4 +1,4 @@
-import { Headset, Landmark, Mail, Zap } from "lucide-react";
+import { Headset, Landmark, RefreshCw, Zap } from "lucide-react";
 import { FadeIn } from "@/components/motion/fade-in";
 import { Stagger, StaggerItem } from "@/components/motion/stagger";
 import { Section, SectionHeader } from "@/components/ui/section";
@@ -89,7 +89,7 @@ const extras = [
   { icon: Zap, title: "Activación instantánea", body: "Tu eSIM llega al momento a tu correo y a tu panel." },
   { icon: Landmark, title: "Paga con SPEI o USDT", body: "Recarga saldo por transferencia o con USDT (TRC20)." },
   { icon: Headset, title: "Soporte humano", body: "Personas reales te ayudan a instalar y resolver dudas." },
-  { icon: Mail, title: "Solo tu correo", body: "Tu cuenta, tu saldo y tus eSIMs en un solo panel." },
+  { icon: RefreshCw, title: "Recargas sin reinstalar", body: "Suma datos y días a tu misma eSIM desde tu panel." },
 ];
 
 export function ValueProps() {

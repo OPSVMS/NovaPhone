@@ -22,7 +22,7 @@ const steps = [
   {
     icon: QrCode,
     title: "Escanea e instala",
-    body: "Escanea el QR o, en iPhone con iOS 17.4 o superior, instálala con un toque. Listo en 1–2 minutos.",
+    body: "Escanea el QR o, en iPhone con iOS 17.4 o superior, instálala con un toque. Solo una vez: después recargas desde tu panel.",
   },
 ];
 

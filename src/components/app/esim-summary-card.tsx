@@ -27,7 +27,7 @@ export function EsimSummaryCard({ order, now }: { order: Order; now: number }) {
           </p>
         </div>
         <div className="flex items-center gap-1.5">
-          <OrderStatusBadge status={order.status} expired={expired} />
+          <OrderStatusBadge status={order.status} expired={expired} suspended={order.suspended} />
           <ChevronRight
             aria-hidden
             className="size-4 text-subtle transition-transform duration-200 group-hover:translate-x-0.5"

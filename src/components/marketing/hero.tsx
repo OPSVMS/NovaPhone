@@ -1,4 +1,4 @@
-import { ArrowRight, RadioTower, Timer, Wallet } from "lucide-react";
+import { ArrowRight, RadioTower, RefreshCw, Timer, Wallet } from "lucide-react";
 import { Aurora } from "@/components/motion/aurora";
 import { FadeIn } from "@/components/motion/fade-in";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +9,7 @@ import { HeroVisual } from "./hero-visual";
 const trust = [
   { icon: RadioTower, label: "Red Telcel 5G" },
   { icon: Timer, label: "Activa en 2 min" },
+  { icon: RefreshCw, label: "Recargas sin reinstalar" },
   { icon: Wallet, label: "SPEI / USDT" },
 ];
 

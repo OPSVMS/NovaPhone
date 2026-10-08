@@ -5,7 +5,7 @@ import type { Order } from "@/db/schema";
 import { listTopupPackages, queryEsim, topupEsim, toUsd } from "./esimaccess";
 import { adjustBalance } from "./wallet";
 import { getActivePlans } from "./catalog";
-import { sendAutoTopupDone, sendAutoTopupNoFunds } from "./email";
+import { sendAutoTopupDone, sendAutoTopupNoFunds, sendLowData, sendExpiringSoon } from "./email";
 import { formatMxn } from "./pricing";
 
 const GB = 1024 ** 3;
@@ -68,6 +68,8 @@ export async function applyTopup(order: Order, planId: string, opts: { auto?: bo
         usedBytes: res.orderUsage,
         expiresAt: res.expiredTime ? new Date(res.expiredTime) : order.expiresAt,
         lowBalanceNotifiedAt: null,
+        lowDataNotifiedAt: null,
+        expiryNotifiedAt: null,
         ...(opts.auto ? { autoTopupLastAt: new Date() } : {}),
         updatedAt: new Date(),
       })
@@ -98,14 +100,39 @@ export async function syncUsage(order: Order): Promise<Order> {
       usedBytes: esim.orderUsage,
       totalBytes: esim.totalVolume,
       esimStatus: esim.esimStatus,
+      smdpStatus: esim.smdpStatus,
       expiresAt: esim.expiredTime ? new Date(esim.expiredTime) : order.expiresAt,
       activatedAt: esim.activateTime ? new Date(esim.activateTime) : order.activatedAt,
       usageSyncedAt: new Date(),
     })
     .where(eq(schema.orders.id, order.id))
     .returning();
-  await maybeAutoTopup(updated);
+  await afterUsageChange(updated);
   return updated;
+}
+
+/** Tras cualquier cambio de consumo/vigencia: auto-recarga o aviso al cliente. */
+export async function afterUsageChange(order: Order) {
+  const topped = await maybeAutoTopup(order);
+  if (!topped) await maybeNotify(order);
+}
+
+async function maybeNotify(order: Order) {
+  if (order.status !== "ready" || order.autoTopupPlanId) return;
+  const total = order.totalBytes ?? 0;
+  const left = total - (order.usedBytes ?? 0);
+  const lowData = total > 0 && (left < AUTO_MIN_BYTES || left / total < AUTO_MIN_RATIO);
+  const expiring = !!order.activatedAt && !!order.expiresAt && order.expiresAt.getTime() - Date.now() < AUTO_DAYS_LEFT * 86_400_000 && order.expiresAt > new Date();
+  if (!lowData && !expiring) return;
+  const user = await db.query.users.findFirst({ where: eq(schema.users.id, order.userId) });
+  if (!user) return;
+  if (lowData && !order.lowDataNotifiedAt) {
+    const [claimed] = await db.update(schema.orders).set({ lowDataNotifiedAt: new Date() }).where(and(eq(schema.orders.id, order.id), isNull(schema.orders.lowDataNotifiedAt))).returning();
+    if (claimed) await sendLowData(user.email, order.planName, Math.max(0, left), order.id);
+  } else if (expiring && !order.expiryNotifiedAt) {
+    const [claimed] = await db.update(schema.orders).set({ expiryNotifiedAt: new Date() }).where(and(eq(schema.orders.id, order.id), isNull(schema.orders.expiryNotifiedAt))).returning();
+    if (claimed) await sendExpiringSoon(user.email, order.planName, order.expiresAt!, order.id);
+  }
 }
 
 export function needsTopup(o: Pick<Order, "usedBytes" | "totalBytes" | "expiresAt" | "activatedAt">) {
@@ -116,10 +143,11 @@ export function needsTopup(o: Pick<Order, "usedBytes" | "totalBytes" | "expiresA
   return lowData || lowDays;
 }
 
-async function maybeAutoTopup(order: Order) {
-  if (!order.autoTopupPlanId || !needsTopup(order)) return;
-  if (order.expiresAt && order.expiresAt < new Date()) return;
-  if (order.autoTopupLastAt && Date.now() - order.autoTopupLastAt.getTime() < AUTO_COOLDOWN_MS) return;
+/** Regresa true si aplicó (o ya está aplicando) una auto-recarga. */
+async function maybeAutoTopup(order: Order): Promise<boolean> {
+  if (!order.autoTopupPlanId || !needsTopup(order)) return false;
+  if (order.suspended || (order.expiresAt && order.expiresAt < new Date())) return false;
+  if (order.autoTopupLastAt && Date.now() - order.autoTopupLastAt.getTime() < AUTO_COOLDOWN_MS) return true;
 
   // Reclama el turno para evitar dobles recargas en ejecuciones simultáneas.
   const [claimed] = await db
@@ -132,13 +160,13 @@ async function maybeAutoTopup(order: Order) {
       ),
     )
     .returning();
-  if (!claimed) return;
+  if (!claimed) return true;
 
   const user = await db.query.users.findFirst({ where: eq(schema.users.id, order.userId) });
   const result = await applyTopup(claimed, order.autoTopupPlanId, { auto: true });
   if (result.ok) {
     if (user) await sendAutoTopupDone(user.email, order.planName, order.id);
-    return;
+    return true;
   }
   // Libera el turno para reintentar en la siguiente revisión.
   await db.update(schema.orders).set({ autoTopupLastAt: order.autoTopupLastAt }).where(eq(schema.orders.id, order.id));
@@ -147,6 +175,7 @@ async function maybeAutoTopup(order: Order) {
     await sendAutoTopupNoFunds(user.email, order.planName, plan ? formatMxn(plan.priceMxn * 100) : "", order.id);
     await db.update(schema.orders).set({ lowBalanceNotifiedAt: new Date() }).where(eq(schema.orders.id, order.id));
   }
+  return true;
 }
 
 export async function setAutoTopup(userId: string, orderId: string, planId: string | null) {

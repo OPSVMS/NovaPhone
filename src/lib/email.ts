@@ -63,3 +63,15 @@ export function sendAutoTopupNoFunds(to: string, planName: string, price: string
   const url = `${process.env.APP_URL ?? ""}/app/fondos`;
   return send(to, "Tu eSIM necesita saldo para recargarse", shell("Agrega saldo para no quedarte sin datos", `<p style="color:#b8b2cc;line-height:1.6">Tu eSIM <b style="color:#fff">${planName}</b> está por terminarse y tienes la auto-recarga activa${price ? ` (${price})` : ""}, pero tu saldo no alcanza.</p><a href="${url}" style="display:block;text-align:center;background:#7652f0;color:#fff;text-decoration:none;padding:14px;border-radius:12px;font-weight:600">Agregar saldo</a><p style="color:#8b84a3;font-size:13px">eSIM: ${process.env.APP_URL ?? ""}/app/esims/${orderId}</p>`));
 }
+
+export function sendLowData(to: string, planName: string, leftBytes: number, orderId: string) {
+  const left = leftBytes >= 1024 ** 3 ? `${(leftBytes / 1024 ** 3).toFixed(1)} GB` : `${Math.round(leftBytes / 1024 ** 2)} MB`;
+  const url = `${process.env.APP_URL ?? ""}/app/esims/${orderId}`;
+  return send(to, `Te quedan ${left} en tu eSIM`, shell("Se están acabando tus datos", `<p style="color:#b8b2cc;line-height:1.6">A tu eSIM <b style="color:#fff">${planName}</b> le quedan <b style="color:#fff">${left}</b>. Recárgala en un toque y se suman datos y días a la misma eSIM, sin reinstalar.</p><a href="${url}" style="display:block;text-align:center;background:#7652f0;color:#fff;text-decoration:none;padding:14px;border-radius:12px;font-weight:600">Recargar ahora</a><p style="color:#8b84a3;font-size:13px">Tip: activa la auto-recarga para no tener que pensar en esto.</p>`));
+}
+
+export function sendExpiringSoon(to: string, planName: string, expiresAt: Date, orderId: string) {
+  const when = new Intl.DateTimeFormat("es-MX", { dateStyle: "long", timeStyle: "short", timeZone: "America/Mexico_City" }).format(expiresAt);
+  const url = `${process.env.APP_URL ?? ""}/app/esims/${orderId}`;
+  return send(to, "Tu eSIM vence pronto", shell("Tu plan está por vencer", `<p style="color:#b8b2cc;line-height:1.6">Tu eSIM <b style="color:#fff">${planName}</b> vence el <b style="color:#fff">${when}</b>. Recárgala antes para conservarla: después de vencer ya no se puede recargar.</p><a href="${url}" style="display:block;text-align:center;background:#7652f0;color:#fff;text-decoration:none;padding:14px;border-radius:12px;font-weight:600">Recargar ahora</a>`));
+}

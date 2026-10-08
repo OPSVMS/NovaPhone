@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AlwaysConnected } from "@/components/marketing/always-connected";
 import { Compatibility } from "@/components/marketing/compatibility";
 import { CtaBand } from "@/components/marketing/cta-band";
 import { FaqSection } from "@/components/marketing/faq-section";
@@ -25,6 +26,7 @@ export default async function HomePage() {
       <div className="hairline mx-auto max-w-6xl" />
       <ValueProps />
       <PlansSection plans={pickHighlights(plans)} total={plans.length} />
+      <AlwaysConnected />
       <HowItWorks />
       <Compatibility />
       <FaqSection />

@@ -17,7 +17,7 @@ function esimView(tran) {
   const e = esims.get(tran);
   return {
     esimTranNo: tran, orderNo: e.orderNo, iccid: `89650126000000${e.n}`, ac: `LPA:1$rsp-test.simlessly.com$TESTCODE${e.n}`,
-    qrCodeUrl: "", shortUrl: "", apn: "e-ideas", esimStatus: e.activated ? "IN_USE" : "GOT_RESOURCE", smdpStatus: e.activated ? "ENABLED" : "RELEASED",
+    qrCodeUrl: "", shortUrl: "", apn: "e-ideas", esimStatus: e.cancelled ? "CANCEL" : e.suspended ? "SUSPENDED" : e.activated ? "IN_USE" : "GOT_RESOURCE", smdpStatus: e.activated ? "ENABLED" : "RELEASED",
     totalVolume: e.volume, orderUsage: e.used, totalDuration: e.duration,
     activateTime: e.activated ? new Date(e.activated).toISOString() : null, expiredTime: new Date(e.expires).toISOString(),
   };
@@ -55,7 +55,15 @@ const routes = {
     if (!esims.has(tran)) esims.set(tran, { orderNo: b.orderNo, n: String(seq++).padStart(6, "0"), volume: o.pkg.volume, used: 0, duration: o.pkg.duration, activated: null, expires: Date.now() + 180 * 86400000 });
     return ok({ esimList: [esimView(tran)] });
   },
-  "/api/v1/open/esim/cancel": () => ok({}),
+  "/api/v1/open/esim/cancel": (b) => {
+    const e = esims.get(b.esimTranNo);
+    if (!e) return fail("310403", "not found");
+    if (e.activated) return fail("200002", "This operation is not allowed due to the order status.");
+    e.cancelled = true;
+    return ok({});
+  },
+  "/api/v1/open/esim/suspend": (b) => (esims.has(b.esimTranNo) ? ((esims.get(b.esimTranNo).suspended = true), ok({})) : fail("310403", "not found")),
+  "/api/v1/open/esim/unsuspend": (b) => (esims.has(b.esimTranNo) ? ((esims.get(b.esimTranNo).suspended = false), ok({})) : fail("310403", "not found")),
   "/api/v1/open/esim/topup": (b) => {
     const e = esims.get(b.esimTranNo);
     if (!e) return fail("310403", "The ICCID does not exist in the order.");

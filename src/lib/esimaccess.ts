@@ -107,3 +107,11 @@ export async function topupEsim(esimTranNo: string, packageCode: string, transac
     transactionId,
   });
 }
+
+export async function suspendEsim(esimTranNo: string) {
+  return call("/esim/suspend", { esimTranNo });
+}
+
+export async function unsuspendEsim(esimTranNo: string) {
+  return call("/esim/unsuspend", { esimTranNo });
+}
