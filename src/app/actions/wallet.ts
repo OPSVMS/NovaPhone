@@ -51,3 +51,24 @@ export async function adminCancelDeposit(form: FormData) {
     .where(and(eq(schema.deposits.id, id), eq(schema.deposits.status, "pending")));
   revalidatePath("/admin");
 }
+
+const cardSchema = z.object({
+  amount: z.coerce.number().int("Usa montos enteros").min(MIN_DEPOSIT_MXN, `Mínimo $${MIN_DEPOSIT_MXN}`).max(20_000, "Máximo $20,000 con tarjeta"),
+});
+
+/** Depósito con tarjeta vía Openpay: redirige a la página segura de pago. */
+export async function payWithCard(_: FormState, form: FormData): Promise<FormState> {
+  const user = await requireUser();
+  const { openpayEnabled, createCardDeposit } = await import("@/lib/openpay");
+  if (!openpayEnabled()) return { error: "El pago con tarjeta estará disponible muy pronto." };
+  const parsed = cardSchema.safeParse(Object.fromEntries(form));
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  let url: string;
+  try {
+    ({ url } = await createCardDeposit(user, parsed.data.amount));
+  } catch (e) {
+    console.error(e);
+    return { error: "No pudimos iniciar el pago con tarjeta. Intenta de nuevo." };
+  }
+  redirect(url);
+}

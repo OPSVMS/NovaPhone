@@ -1,13 +1,15 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { and, eq, gt, isNull, desc, sql } from "drizzle-orm";
 import { createHash, randomInt } from "node:crypto";
 import { db, schema } from "@/db";
 import { createSession, destroySession, getUser } from "@/lib/session";
-import { emailEnabled, sendVerificationCode } from "@/lib/email";
+import { emailEnabled, sendPasswordChanged, sendPasswordResetCode, sendVerificationCode, sendWelcome } from "@/lib/email";
+import { ensureClabe } from "@/lib/novacore";
 
 export type FormState = { error?: string; ok?: string } | undefined;
 
@@ -17,7 +19,7 @@ const safeNext = (v: unknown) => (typeof v === "string" && v.startsWith("/") && 
 const adminEmails = () => (process.env.ADMIN_EMAILS ?? "").toLowerCase().split(",").map((s) => s.trim()).filter(Boolean);
 
 async function issueCode(userId: string, email: string) {
-  const code = String(randomInt(100000, 999999));
+  const code = String(randomInt(100000, 1000000));
   await db.insert(schema.emailCodes).values({ userId, purpose: "verify", codeHash: hashCode(code), expiresAt: new Date(Date.now() + 15 * 60_000) });
   await sendVerificationCode(email, code);
 }
@@ -50,7 +52,12 @@ export async function register(_: FormState, form: FormData): Promise<FormState>
     .returning();
 
   await createSession(user.id);
-  if (!emailEnabled()) redirect(next ?? "/app");
+  // CLABE personal en segundo plano: no bloquea la redirección.
+  after(() => ensureClabe({ id: user.id, name: user.name, email: user.email }).catch(() => null));
+  if (!emailEnabled()) {
+    after(() => sendWelcome(user.email, user.name));
+    redirect(next ?? "/app");
+  }
   await issueCode(user.id, email);
   redirect(next ? `/verificar?next=${encodeURIComponent(next)}` : "/verificar");
 }
@@ -95,6 +102,7 @@ export async function verifyEmail(_: FormState, form: FormData): Promise<FormSta
   }
   await db.update(schema.emailCodes).set({ usedAt: new Date() }).where(eq(schema.emailCodes.id, row.id));
   await db.update(schema.users).set({ emailVerifiedAt: new Date() }).where(eq(schema.users.id, user.id));
+  after(() => sendWelcome(user.email, user.name));
   redirect(next);
 }
 
@@ -107,4 +115,85 @@ export async function resendCode(): Promise<FormState> {
   if (recent) return { error: "Espera un minuto antes de pedir otro código." };
   await issueCode(user.id, user.email);
   return { ok: "Te enviamos un código nuevo." };
+}
+
+// ─── Recuperar contraseña ────────────────────────────────────────────────────
+
+const RESET_GENERIC = "Si hay una cuenta con ese correo, te enviamos un código.";
+const emailField = z.email("Escribe un correo válido.").transform((e) => e.toLowerCase().trim());
+
+/**
+ * Envía un código de restablecimiento. Siempre responde lo mismo (exista o no la cuenta)
+ * para no revelar qué correos están registrados. Máximo 1 código por minuto por usuario.
+ */
+async function sendResetCodeFor(email: string) {
+  const user = await db.query.users.findFirst({ where: eq(schema.users.email, email) });
+  if (!user) return;
+  const recent = await db.query.emailCodes.findFirst({
+    where: and(eq(schema.emailCodes.userId, user.id), eq(schema.emailCodes.purpose, "reset"), gt(schema.emailCodes.createdAt, new Date(Date.now() - 60_000))),
+  });
+  if (recent) return;
+  const code = String(randomInt(100000, 1000000));
+  await db.insert(schema.emailCodes).values({ userId: user.id, purpose: "reset", codeHash: hashCode(code), expiresAt: new Date(Date.now() + 15 * 60_000) });
+  // Fuera de la respuesta: el tiempo de respuesta no delata si la cuenta existe.
+  after(() => sendPasswordResetCode(user.email, code));
+}
+
+export async function requestPasswordReset(_: FormState, form: FormData): Promise<FormState> {
+  const parsed = emailField.safeParse(String(form.get("email") ?? "").trim());
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  await sendResetCodeFor(parsed.data);
+  redirect(`/recuperar/nueva?email=${encodeURIComponent(parsed.data)}`);
+}
+
+/** Reenvío desde /recuperar/nueva. Misma respuesta genérica. */
+export async function resendPasswordReset(email: string): Promise<FormState> {
+  const parsed = emailField.safeParse(String(email ?? "").trim());
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  await sendResetCodeFor(parsed.data);
+  return { ok: RESET_GENERIC };
+}
+
+const resetSchema = z.object({
+  email: emailField,
+  code: z.string().transform((c) => c.replace(/\D/g, "")),
+  password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres").max(128, "La contraseña es demasiado larga"),
+});
+
+export async function resetPassword(_: FormState, form: FormData): Promise<FormState> {
+  const parsed = resetSchema.safeParse({ email: form.get("email") ?? "", code: form.get("code") ?? "", password: form.get("password") ?? "" });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const { email, code, password } = parsed.data;
+  if (code.length !== 6) return { error: "El código tiene 6 dígitos." };
+
+  const user = await db.query.users.findFirst({ where: eq(schema.users.email, email) });
+  const row = user
+    ? await db.query.emailCodes.findFirst({
+        where: and(eq(schema.emailCodes.userId, user.id), eq(schema.emailCodes.purpose, "reset"), isNull(schema.emailCodes.usedAt), gt(schema.emailCodes.expiresAt, new Date())),
+        orderBy: desc(schema.emailCodes.createdAt),
+      })
+    : undefined;
+  if (!user || !row || row.attempts >= 5) return { error: "El código expiró o no es válido. Pide uno nuevo." };
+  if (row.codeHash !== hashCode(code)) {
+    await db.update(schema.emailCodes).set({ attempts: sql`${schema.emailCodes.attempts} + 1` }).where(eq(schema.emailCodes.id, row.id));
+    return { error: row.attempts + 1 >= 5 ? "Demasiados intentos. Pide un código nuevo." : "Código incorrecto." };
+  }
+
+  // Marca el código como usado de forma atómica (evita doble uso en paralelo).
+  const [used] = await db
+    .update(schema.emailCodes)
+    .set({ usedAt: new Date() })
+    .where(and(eq(schema.emailCodes.id, row.id), isNull(schema.emailCodes.usedAt)))
+    .returning({ id: schema.emailCodes.id });
+  if (!used) return { error: "El código expiró o no es válido. Pide uno nuevo." };
+
+  await db
+    .update(schema.users)
+    // Restablecer con un código enviado al correo también prueba que el correo es suyo.
+    .set({ passwordHash: await bcrypt.hash(password, 10), emailVerifiedAt: user.emailVerifiedAt ?? new Date() })
+    .where(eq(schema.users.id, user.id));
+  await db.delete(schema.sessions).where(eq(schema.sessions.userId, user.id));
+  await createSession(user.id);
+  after(() => sendPasswordChanged(user.email));
+  redirect("/app");
 }

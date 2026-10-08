@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge";
-import type { Deposit, Order } from "@/db/schema";
+import type { Deposit, Order, PhoneNumber } from "@/db/schema";
 
 export function OrderStatusBadge({ status, expired, suspended }: { status: Order["status"]; expired?: boolean; suspended?: boolean }) {
   if (status === "ready" && expired) return <Badge variant="neutral">Vencida</Badge>;
@@ -43,7 +43,31 @@ export function DepositStatusBadge({ status }: { status: Deposit["status"] }) {
       return <Badge variant="neutral">Expirado</Badge>;
     case "cancelled":
       return <Badge variant="neutral">Cancelado</Badge>;
+    case "returned":
+      return <Badge variant="danger">Devuelto</Badge>;
   }
 }
 
-export const methodLabel = (m: Deposit["method"]) => (m === "spei" ? "SPEI" : m === "usdt" ? "USDT" : "Manual");
+export const methodLabel = (m: Deposit["method"]) =>
+  m === "spei" ? "SPEI" : m === "usdt" ? "USDT" : m === "card" ? "Tarjeta" : "Manual";
+
+/** Estado del número NovaPhone. */
+export function NumberStatusBadge({ graceUntil, autoRenew }: { graceUntil: Date | null; autoRenew: boolean }) {
+  if (graceUntil) return <Badge variant="warning" dot="pulse">Pago pendiente</Badge>;
+  if (!autoRenew) return <Badge variant="neutral">Sin renovación</Badge>;
+  return <Badge variant="success" dot>Activo</Badge>;
+}
+
+/** Estado de inventario (admin). */
+export function InventoryStatusBadge({ status, cooldownUntil }: { status: PhoneNumber["status"]; cooldownUntil: Date | null }) {
+  switch (status) {
+    case "available":
+      return <Badge variant="success" dot>Disponible</Badge>;
+    case "assigned":
+      return <Badge variant="primary">Asignado</Badge>;
+    case "cooldown":
+      return cooldownUntil && cooldownUntil < new Date() ? <Badge variant="success" dot>Disponible</Badge> : <Badge variant="warning">En espera</Badge>;
+    case "retired":
+      return <Badge variant="neutral">Retirado</Badge>;
+  }
+}

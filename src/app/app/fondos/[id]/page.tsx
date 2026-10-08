@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CircleCheck, Clock, Headset, TriangleAlert } from "lucide-react";
+import { CircleCheck, CircleX, Clock, CreditCard, Headset, Lock, TriangleAlert, Undo2 } from "lucide-react";
 import { requireUser } from "@/lib/session";
 import { paymentInstructions } from "@/lib/deposits";
 import { getUserDeposit } from "@/lib/queries";
+import { openpayEnabled, syncCardDeposit } from "@/lib/openpay";
 import { formatMxn } from "@/lib/pricing";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -14,6 +16,7 @@ import { CopyField, InfoRow } from "@/components/app/copy-field";
 import { DepositStatusBadge, methodLabel } from "@/components/app/status-badges";
 import { AutoRefresh } from "@/components/app/auto-refresh";
 import { formatDateTime } from "@/components/app/format";
+import { Spinner } from "@/components/ui/spinner";
 
 export const metadata: Metadata = { title: "Instrucciones de pago" };
 
@@ -22,11 +25,23 @@ const groupClabe = (c: string) => c.replace(/\s/g, "").replace(/(\d{3})(\d{3})(\
 export default async function DepositPage({ params }: PageProps<"/app/fondos/[id]">) {
   const { id } = await params;
   const user = await requireUser();
-  const dep = await getUserDeposit(user.id, id);
+  let dep = await getUserDeposit(user.id, id);
   if (!dep) notFound();
+
+  // Tarjeta pendiente: consulta el cargo en Openpay (por si el webhook aún no llega).
+  if (dep.method === "card" && dep.status === "pending" && openpayEnabled()) {
+    const synced = await syncCardDeposit(dep.id).catch((e) => {
+      console.error("syncCardDeposit", e);
+      return "pending";
+    });
+    if (synced !== "pending") dep = (await getUserDeposit(user.id, id)) ?? dep;
+  }
 
   const back = { href: "/app/fondos", label: "Fondos" };
   const amount = formatMxn(dep.amountCents);
+  const isCard = dep.method === "card";
+  const cardMeta = (dep.meta ?? {}) as { feeCents?: number; chargedCents?: number; error?: string };
+  const retryHref = `/app/fondos?monto=${dep.amountCents / 100}&metodo=${isCard ? "tarjeta" : dep.method}`;
 
   if (dep.status === "completed") {
     return (
@@ -43,6 +58,17 @@ export default async function DepositPage({ params }: PageProps<"/app/fondos/[id
                 <p className="text-[15px] text-muted">
                   Ya está en tu saldo{dep.completedAt ? ` desde el ${formatDateTime(dep.completedAt)}` : ""}.
                 </p>
+                {isCard && cardMeta.chargedCents ? (
+                  <p className="text-[13px] text-subtle">
+                    Cargo a tu tarjeta: <span className="tabular-nums">{formatMxn(cardMeta.chargedCents)}</span>
+                    {cardMeta.feeCents ? (
+                      <>
+                        {" "}
+                        (incluye comisión <span className="tabular-nums">{formatMxn(cardMeta.feeCents)}</span>)
+                      </>
+                    ) : null}
+                  </p>
+                ) : null}
               </div>
               <div className="flex w-full flex-col gap-2.5 sm:w-auto sm:flex-row">
                 <Button href="/app/comprar" size="lg" className="w-full sm:w-auto">
@@ -59,6 +85,105 @@ export default async function DepositPage({ params }: PageProps<"/app/fondos/[id
     );
   }
 
+  if (dep.status === "returned") {
+    return (
+      <div className="flex flex-col gap-6">
+        <PageHeader back={back} title={`Depósito ${methodLabel(dep.method)}`} action={<DepositStatusBadge status={dep.status} />} />
+        <Card className="p-6 sm:p-8">
+          <div className="flex flex-col items-start gap-5">
+            <span className="flex size-12 items-center justify-center rounded-2xl border border-danger/25 bg-danger/10 text-danger">
+              <Undo2 aria-hidden className="size-5" />
+            </span>
+            <div className="flex flex-col gap-2">
+              <h2 className="text-xl font-semibold text-fg">Tu banco devolvió esta transferencia</h2>
+              <p className="max-w-prose text-[15px] leading-relaxed text-muted">
+                El banco emisor regresó los <span className="text-fg tabular-nums">{amount}</span> a tu cuenta, así que los
+                descontamos de tu saldo. Suele pasar por datos del ordenante o límites de tu banco. Si fue un error, vuelve a
+                transferir o contacta a soporte con la referencia <span className="font-mono text-fg">{dep.reference}</span>.
+              </p>
+            </div>
+            <div className="flex w-full flex-col gap-2.5 sm:w-auto sm:flex-row">
+              <Button href="/app/fondos" className="w-full sm:w-auto">
+                Agregar fondos
+              </Button>
+              <Button href="/app/movimientos" variant="secondary" className="w-full sm:w-auto">
+                Ver movimientos
+              </Button>
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  if (isCard && dep.status === "cancelled") {
+    return (
+      <div className="flex flex-col gap-6">
+        <PageHeader back={back} title="Pago con tarjeta" action={<DepositStatusBadge status={dep.status} />} />
+        <FadeIn immediate>
+          <Card className="p-6 text-center sm:p-10">
+            <div className="flex flex-col items-center gap-5">
+              <span className="flex size-14 items-center justify-center rounded-2xl border border-danger/25 bg-danger/10 text-danger">
+                <CircleX aria-hidden className="size-6" />
+              </span>
+              <div className="flex flex-col gap-2">
+                <h2 className="text-2xl font-semibold text-fg">El pago no se completó</h2>
+                <p className="max-w-prose text-[15px] leading-relaxed text-muted">
+                  No se hizo ningún cargo a tu tarjeta por {amount}. Puede ser un rechazo del banco o que la verificación 3D
+                  Secure no se terminó. Intenta de nuevo o usa otra tarjeta.
+                </p>
+                {cardMeta.error ? <p className="text-[13px] text-subtle">Motivo: {cardMeta.error}</p> : null}
+              </div>
+              <div className="flex w-full flex-col gap-2.5 sm:w-auto sm:flex-row">
+                <Button href={retryHref} size="lg" className="w-full sm:w-auto">
+                  <CreditCard aria-hidden /> Intentar de nuevo
+                </Button>
+                <Button href="/app/fondos?metodo=spei" size="lg" variant="secondary" className="w-full sm:w-auto">
+                  Pagar con SPEI
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </FadeIn>
+      </div>
+    );
+  }
+
+  if (isCard) {
+    // Pendiente: esperando confirmación de Openpay.
+    return (
+      <div className="flex flex-col gap-6">
+        <AutoRefresh ms={5_000} />
+        <PageHeader back={back} title="Pago con tarjeta" action={<DepositStatusBadge status={dep.status} />} />
+        <Card className="p-6 text-center sm:p-10" role="status">
+          <div className="flex flex-col items-center gap-5">
+            <span className="flex size-14 items-center justify-center rounded-2xl border border-border bg-surface-2 text-lavender">
+              <Spinner size={22} label="Confirmando pago" />
+            </span>
+            <div className="flex flex-col gap-2">
+              <h2 className="text-2xl font-semibold text-fg">Confirmando tu pago…</h2>
+              <p className="max-w-prose text-[15px] leading-relaxed text-muted">
+                Estamos verificando el cargo de{" "}
+                <span className="text-fg tabular-nums">{formatMxn(cardMeta.chargedCents ?? dep.amountCents)}</span> con tu
+                banco. Esta pantalla se actualiza sola; suele tardar unos segundos.
+              </p>
+            </div>
+            <p className="flex items-center gap-1.5 text-[13px] text-subtle">
+              <Lock aria-hidden className="size-3.5" /> Openpay (BBVA) · 3D Secure
+            </p>
+          </div>
+        </Card>
+        <p className="text-[13px] leading-relaxed text-subtle">
+          ¿Cerraste la página de pago sin terminar?{" "}
+          <Link href={retryHref} className="text-lavender underline-offset-4 hover:underline">
+            Inicia un nuevo pago
+          </Link>
+          . Si ya pagaste, no hagas nada: se acreditará en cuanto tu banco lo confirme.
+        </p>
+      </div>
+    );
+  }
+
   if (dep.status === "expired" || dep.status === "cancelled") {
     return (
       <div className="flex flex-col gap-6">
@@ -67,7 +192,7 @@ export default async function DepositPage({ params }: PageProps<"/app/fondos/[id
           variant="warning"
           title={dep.status === "expired" ? "Estas instrucciones expiraron" : "Este depósito fue cancelado"}
           action={
-            <Button href={`/app/fondos?monto=${dep.amountCents / 100}&metodo=${dep.method}`} size="sm">
+            <Button href={retryHref} size="sm">
               Generar nuevas
             </Button>
           }

@@ -12,7 +12,25 @@ export async function register(page: Page, opts: { email?: string; name?: string
   await page.locator('input[name="password"]').fill(PASSWORD);
   await page.locator('form button[type="submit"]').click();
   await page.waitForURL(/\/app/);
+  (page as unknown as { __email: string }).__email = email;
   return email;
+}
+
+export const emailOf = (page: Page) => (page as unknown as { __email: string }).__email;
+
+/** CLABE personal del usuario (se asigna al abrir Fondos). */
+export async function clabeOf(page: Page) {
+  await page.goto("/app/fondos");
+  await expect(page.getByText("Tu CLABE personal").first()).toBeVisible();
+  const [row] = await dbQuery<{ clabe: string }>("select clabe from users where email = $1", [emailOf(page)]);
+  expect(row.clabe).toMatch(/^\d{18}$/);
+  return row.clabe;
+}
+
+/** Simula un SPEI a la CLABE del usuario en NOVACORE (mock). */
+export async function speiToClabe(clabe: string, amount: number, opts: { send?: boolean; trackingKey?: string } = {}) {
+  const res = await fetch(`${process.env.MOCK_URL}/__test/novacore/deposit`, { method: "POST", body: JSON.stringify({ clabe, amount, ...opts }) });
+  return (await res.json()) as { deposit: Record<string, unknown> & { trackingKey: string }; callback: { status: number; json: Record<string, unknown> } | null };
 }
 
 export async function login(page: Page, email: string, password = PASSWORD) {
@@ -91,9 +109,10 @@ export async function simulateUsage(esimTranNo: string, usedBytes: number) {
   await fetch(`${process.env.MOCK_URL}/__test/usage`, { method: "POST", body: JSON.stringify({ esimTranNo, usedBytes }) });
 }
 
-export async function fundAccount(page: Page, request: APIRequestContext, amount: number) {
-  const { reference } = await requestDeposit(page, amount);
-  await creditSpei(request, reference, amount);
+export async function fundAccount(page: Page, _request: APIRequestContext, amount: number) {
+  const r = await speiToClabe(await clabeOf(page), amount);
+  expect(r.callback?.status).toBe(200);
+  expect(r.callback?.json.result).toBe("credited");
 }
 
 /** Compra un plan y espera a que la eSIM esté lista. Regresa el id de la orden. */

@@ -3,7 +3,7 @@ import { and, eq, desc } from "drizzle-orm";
 import { randomInt } from "node:crypto";
 import { db, schema } from "@/db";
 import { adjustBalance } from "./wallet";
-import { sendDepositCredited } from "./email";
+import { sendDepositCredited, sendDepositRequested } from "./email";
 import { formatMxn } from "./pricing";
 
 export const MIN_DEPOSIT_MXN = 100;
@@ -24,6 +24,19 @@ export async function createDeposit(userId: string, method: "spei" | "usdt", amo
     .insert(schema.deposits)
     .values({ userId, method, amountCents: Math.round(amountMxn * 100), reference, expectedUsdt, meta: { fx } })
     .returning();
+  const user = await db.query.users.findFirst({ where: eq(schema.users.id, userId) });
+  if (user) {
+    const info = paymentInstructions();
+    await sendDepositRequested(user.email, {
+      method,
+      amount: formatMxn(dep.amountCents),
+      reference,
+      depositUrl: `${process.env.APP_URL ?? ""}/app/fondos/${dep.id}`,
+      ...(method === "spei"
+        ? { clabe: info.spei.clabe || undefined, bank: info.spei.bank || undefined, beneficiary: info.spei.beneficiary }
+        : { usdtAmount: expectedUsdt ?? undefined, usdtAddress: info.usdt.address || undefined, usdtNetwork: info.usdt.network }),
+    });
+  }
   return dep;
 }
 
@@ -45,11 +58,14 @@ export async function completeDeposit(depositId: string, opts: { externalId?: st
     userId: dep.userId,
     amountCents: dep.amountCents,
     kind: "deposit",
-    description: dep.method === "spei" ? "Depósito SPEI" : dep.method === "usdt" ? "Depósito USDT" : "Depósito",
+    description: dep.method === "spei" ? "Depósito SPEI" : dep.method === "usdt" ? "Depósito USDT" : dep.method === "card" ? "Depósito con tarjeta" : "Depósito",
     refId: dep.id,
   });
   const user = await db.query.users.findFirst({ where: eq(schema.users.id, dep.userId) });
   if (user) await sendDepositCredited(user.email, formatMxn(dep.amountCents));
+  // Si tenía un número en periodo de gracia, intenta renovarlo con el nuevo saldo.
+  const { retryRenewalFor } = await import("./numbers");
+  await retryRenewalFor(dep.userId).catch(() => null);
   return dep;
 }
 
@@ -68,4 +84,15 @@ export async function creditClabeDeposit(clabe: string, amountCents: number, ext
     .returning();
   if (!dep) return db.query.deposits.findFirst({ where: eq(schema.deposits.externalId, externalId) });
   return completeDeposit(dep.id, { externalId });
+}
+
+/** Expira cargos con tarjeta abandonados (el cliente nunca completó el pago en Openpay). */
+export async function expireStaleCardDeposits(hours = 24) {
+  const { lt } = await import("drizzle-orm");
+  const rows = await db
+    .update(schema.deposits)
+    .set({ status: "expired" })
+    .where(and(eq(schema.deposits.method, "card"), eq(schema.deposits.status, "pending"), lt(schema.deposits.createdAt, new Date(Date.now() - hours * 3600_000))))
+    .returning();
+  return rows.length;
 }

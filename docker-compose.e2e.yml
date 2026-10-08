@@ -17,6 +17,9 @@ services:
     working_dir: /mock
     volumes: ["./e2e/mock:/mock:ro"]
     command: ["node", "server.mjs"]
+    environment:
+      APP_URL: "http://web:3000"
+      MOCK_PUBLIC_URL: "http://mock:4010"
     healthcheck: { test: ["CMD", "node", "-e", "fetch('http://localhost:4010/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"], interval: 2s, retries: 30 }
 
   web:
@@ -39,6 +42,15 @@ services:
       SPEI_BENEFICIARY: "NovaPhone"
       USDT_NETWORK: "TRON (TRC20)"
       USDT_ADDRESS: "TTestAddressNovaPhone000000000000"
+      NOVACORE_BASE_URL: "http://mock:4010"
+      NOVACORE_API_KEY: "test-novacore-key"
+      NOVACORE_SIGNING_SECRET: "test-novacore-signing"
+      NOVACORE_CALLBACK_SECRET: "test-novacore-callback"
+      OPENPAY_BASE_URL: "http://mock:4010"
+      OPENPAY_MERCHANT_ID: "mtestmerchant"
+      OPENPAY_PRIVATE_KEY: "sk_test_openpay"
+      SMS_WEBHOOK_TOKEN: "test-sms-token"
+      PHONE_NUMBER_PRICE_MXN: "79"
     depends_on:
       neon-proxy: { condition: service_started }
       mock: { condition: service_healthy }
@@ -54,6 +66,7 @@ services:
       CRON_SECRET: "test-cron-secret"
       ESIMACCESS_WEBHOOK_TOKEN: "test-webhook-token"
       MOCK_URL: "http://mock:4010"
+      SMS_WEBHOOK_TOKEN: "test-sms-token"
       NEON_SQL_URL: "http://neon-proxy:4444/sql"
       DB_URL: "postgres://postgres:postgres@db.localtest.me:5432/main"
       CI: "1"

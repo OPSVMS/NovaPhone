@@ -9,10 +9,12 @@ export async function adjustBalance(params: {
   kind: "deposit" | "purchase" | "refund" | "adjustment";
   description: string;
   refId?: string;
+  /** Permite saldo negativo (p. ej. un SPEI devuelto después de acreditarse). */
+  allowNegative?: boolean;
 }) {
   const { userId, amountCents } = params;
   const where =
-    amountCents < 0
+    amountCents < 0 && !params.allowNegative
       ? and(eq(schema.users.id, userId), gte(schema.users.balanceCents, -amountCents))
       : eq(schema.users.id, userId);
   const [row] = await db

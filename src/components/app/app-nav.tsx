@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
 import { motion } from "motion/react";
-import { NAV_ITEMS, isActive } from "./nav-items";
+import { MOBILE_NAV_ITEMS, NAV_ITEMS, isActive } from "./nav-items";
 
 const SPRING = { type: "spring", bounce: 0.15, duration: 0.45 } as const;
 
@@ -52,7 +52,7 @@ export function BottomNav() {
       className="glass-strong fixed inset-x-0 bottom-0 z-40 border-x-0 border-b-0 pb-[env(safe-area-inset-bottom)] lg:hidden"
     >
       <ul className="mx-auto grid h-16 max-w-lg grid-cols-5 px-1">
-        {NAV_ITEMS.map((item) => {
+        {MOBILE_NAV_ITEMS.map((item) => {
           const active = isActive(pathname, item);
           const Icon = item.icon;
           return (

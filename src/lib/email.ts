@@ -1,77 +1,137 @@
 import "server-only";
 import { Resend } from "resend";
+import * as t from "@/emails/templates";
+import type { Email } from "@/emails/templates";
+
+/**
+ * Correos transaccionales de NovaPhone (Resend).
+ * - Sin RESEND_API_KEY: no envía, solo registra en consola (los tests dependen de esto).
+ * - `send` nunca lanza: los errores se registran y el flujo sigue.
+ * Diseño y plantillas: `src/emails/`.
+ */
 
 export const emailEnabled = () => !!process.env.RESEND_API_KEY;
 
-const shell = (title: string, body: string) => `<!doctype html><html><body style="margin:0;background:#0b0814;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#ece9f6">
-<table width="100%" cellpadding="0" cellspacing="0" style="padding:32px 16px"><tr><td align="center">
-<table width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#14101f;border:1px solid #2a2140;border-radius:20px;padding:32px">
-<tr><td style="font-size:18px;font-weight:700;letter-spacing:-.02em;color:#fff">Nova<span style="color:#a78bfa">Phone</span></td></tr>
-<tr><td style="padding-top:24px"><h1 style="margin:0 0 12px;font-size:22px;color:#fff">${title}</h1>${body}</td></tr>
-<tr><td style="padding-top:28px;font-size:12px;color:#8b84a3">NovaPhone · Conectividad sin fronteras</td></tr>
-</table></td></tr></table></body></html>`;
+const FROM = () => process.env.EMAIL_FROM || "NovaPhone <hola@novaphone.lat>";
+const REPLY_TO = "hola@novaphone.lat";
 
-async function send(to: string, subject: string, html: string) {
+type Attachment = { filename: string; content: Buffer; contentId: string };
+
+let client: Resend | null = null;
+
+async function send(to: string, email: Email, attachments?: Attachment[]) {
   if (!emailEnabled()) {
-    console.log(`[email deshabilitado] ${to} · ${subject}`);
+    console.log(`[email deshabilitado] ${to} · ${email.subject}`);
     return;
   }
-  const resend = new Resend(process.env.RESEND_API_KEY);
-  const { error } = await resend.emails.send({ from: process.env.EMAIL_FROM ?? "NovaPhone <onboarding@resend.dev>", to, subject, html });
-  if (error) console.error("Resend error", error);
+  try {
+    client ??= new Resend(process.env.RESEND_API_KEY);
+    const { error } = await client.emails.send({
+      from: FROM(),
+      to,
+      replyTo: REPLY_TO,
+      subject: email.subject,
+      html: email.html,
+      text: email.text,
+      ...(attachments?.length ? { attachments } : {}),
+    });
+    if (error) console.error(`[email] Resend error · ${email.subject}`, error);
+  } catch (err) {
+    console.error(`[email] fallo al enviar · ${email.subject}`, err);
+  }
 }
+
+/** data:image/png;base64,... → adjunto inline (Gmail bloquea imágenes data: en el cuerpo). */
+function inlineImage(src: string, contentId: string): { src: string; attachments?: Attachment[] } {
+  const m = /^data:image\/(png|jpe?g|gif);base64,(.+)$/i.exec(src);
+  if (!m) return { src };
+  const ext = m[1].toLowerCase() === "jpeg" ? "jpg" : m[1].toLowerCase();
+  return { src: `cid:${contentId}`, attachments: [{ filename: `${contentId}.${ext}`, content: Buffer.from(m[2], "base64"), contentId }] };
+}
+
+// ─── Cuenta ──────────────────────────────────────────────────────────────────
 
 export function sendVerificationCode(to: string, code: string) {
-  return send(
-    to,
-    `${code} es tu código de NovaPhone`,
-    shell(
-      "Confirma tu correo",
-      `<p style="color:#b8b2cc;line-height:1.6">Usa este código para activar tu cuenta. Expira en 15 minutos.</p>
-       <div style="margin:20px 0;padding:18px;border-radius:14px;background:#1d1630;border:1px solid #3b2d63;text-align:center;font-size:32px;letter-spacing:10px;font-weight:700;color:#c4b5fd">${code}</div>`,
-    ),
-  );
+  return send(to, t.verificationCode(code));
 }
+
+export function sendWelcome(to: string, name: string) {
+  return send(to, t.welcome(name));
+}
+
+export function sendPasswordResetCode(to: string, code: string) {
+  return send(to, t.passwordResetCode(code));
+}
+
+export function sendPasswordChanged(to: string) {
+  return send(to, t.passwordChanged());
+}
+
+// ─── eSIM ────────────────────────────────────────────────────────────────────
 
 export function sendEsimReady(to: string, o: { planName: string; activationCode: string; orderUrl: string; qrDataUrl: string }) {
-  const apple = `https://esimsetup.apple.com/esim_qrcode_provisioning?carddata=${o.activationCode}`;
-  const [, smdp, code] = o.activationCode.split("$");
-  return send(
-    to,
-    `Tu eSIM ${o.planName} está lista`,
-    shell(
-      "Tu eSIM está lista ✦",
-      `<p style="color:#b8b2cc;line-height:1.6">${o.planName}. Escanea el código desde otro dispositivo o instálala con un toque en iPhone.</p>
-       <div style="text-align:center;margin:20px 0"><img src="${o.qrDataUrl}" width="200" height="200" alt="QR eSIM" style="border-radius:12px;background:#fff;padding:8px"/></div>
-       <a href="${apple}" style="display:block;text-align:center;background:#8b5cf6;color:#fff;text-decoration:none;padding:14px;border-radius:12px;font-weight:600">Instalar en iPhone</a>
-       <p style="color:#8b84a3;font-size:13px;line-height:1.6;margin-top:20px">Instalación manual<br/>SM-DP+: <b style="color:#ece9f6">${smdp}</b><br/>Código: <b style="color:#ece9f6">${code}</b></p>
-       <p style="color:#8b84a3;font-size:13px">Activa <b>Roaming de datos</b> en esta línea. <a href="${o.orderUrl}" style="color:#a78bfa">Ver mi eSIM</a></p>`,
-    ),
-  );
-}
-
-export function sendDepositCredited(to: string, amount: string) {
-  return send(to, `Recibimos tu depósito de ${amount}`, shell("Saldo acreditado", `<p style="color:#b8b2cc;line-height:1.6">Tu depósito de <b style="color:#fff">${amount}</b> ya está disponible en tu saldo NovaPhone.</p>`));
+  const qr = inlineImage(o.qrDataUrl, "esim-qr");
+  return send(to, t.esimReady({ planName: o.planName, activationCode: o.activationCode, orderUrl: o.orderUrl, qrSrc: qr.src }), qr.attachments);
 }
 
 export function sendAutoTopupDone(to: string, planName: string, orderId: string) {
-  const url = `${process.env.APP_URL ?? ""}/app/esims/${orderId}`;
-  return send(to, "Recargamos tu eSIM automáticamente", shell("Auto-recarga aplicada ✦", `<p style="color:#b8b2cc;line-height:1.6">Tu eSIM <b style="color:#fff">${planName}</b> se estaba quedando sin datos o días, así que la recargamos con tu saldo. Sigues conectado sin hacer nada.</p><p><a href="${url}" style="color:#a78bfa">Ver mi eSIM</a></p>`));
+  return send(to, t.autoTopupDone(planName, orderId));
 }
 
 export function sendAutoTopupNoFunds(to: string, planName: string, price: string, orderId: string) {
-  const url = `${process.env.APP_URL ?? ""}/app/fondos`;
-  return send(to, "Tu eSIM necesita saldo para recargarse", shell("Agrega saldo para no quedarte sin datos", `<p style="color:#b8b2cc;line-height:1.6">Tu eSIM <b style="color:#fff">${planName}</b> está por terminarse y tienes la auto-recarga activa${price ? ` (${price})` : ""}, pero tu saldo no alcanza.</p><a href="${url}" style="display:block;text-align:center;background:#7652f0;color:#fff;text-decoration:none;padding:14px;border-radius:12px;font-weight:600">Agregar saldo</a><p style="color:#8b84a3;font-size:13px">eSIM: ${process.env.APP_URL ?? ""}/app/esims/${orderId}</p>`));
+  return send(to, t.autoTopupNoFunds(planName, price, orderId));
 }
 
 export function sendLowData(to: string, planName: string, leftBytes: number, orderId: string) {
-  const left = leftBytes >= 1024 ** 3 ? `${(leftBytes / 1024 ** 3).toFixed(1)} GB` : `${Math.round(leftBytes / 1024 ** 2)} MB`;
-  const url = `${process.env.APP_URL ?? ""}/app/esims/${orderId}`;
-  return send(to, `Te quedan ${left} en tu eSIM`, shell("Se están acabando tus datos", `<p style="color:#b8b2cc;line-height:1.6">A tu eSIM <b style="color:#fff">${planName}</b> le quedan <b style="color:#fff">${left}</b>. Recárgala en un toque y se suman datos y días a la misma eSIM, sin reinstalar.</p><a href="${url}" style="display:block;text-align:center;background:#7652f0;color:#fff;text-decoration:none;padding:14px;border-radius:12px;font-weight:600">Recargar ahora</a><p style="color:#8b84a3;font-size:13px">Tip: activa la auto-recarga para no tener que pensar en esto.</p>`));
+  return send(to, t.lowData(planName, leftBytes, orderId));
 }
 
 export function sendExpiringSoon(to: string, planName: string, expiresAt: Date, orderId: string) {
-  const when = new Intl.DateTimeFormat("es-MX", { dateStyle: "long", timeStyle: "short", timeZone: "America/Mexico_City" }).format(expiresAt);
-  const url = `${process.env.APP_URL ?? ""}/app/esims/${orderId}`;
-  return send(to, "Tu eSIM vence pronto", shell("Tu plan está por vencer", `<p style="color:#b8b2cc;line-height:1.6">Tu eSIM <b style="color:#fff">${planName}</b> vence el <b style="color:#fff">${when}</b>. Recárgala antes para conservarla: después de vencer ya no se puede recargar.</p><a href="${url}" style="display:block;text-align:center;background:#7652f0;color:#fff;text-decoration:none;padding:14px;border-radius:12px;font-weight:600">Recargar ahora</a>`));
+  return send(to, t.expiringSoon(planName, expiresAt, orderId));
+}
+
+export function sendTopupApplied(to: string, o: { planName: string; topupName: string; amount: string; orderId: string }) {
+  return send(to, t.topupApplied(o));
+}
+
+// ─── Saldo ───────────────────────────────────────────────────────────────────
+
+export function sendDepositCredited(to: string, amount: string) {
+  return send(to, t.depositCredited(amount));
+}
+
+export function sendDepositRequested(
+  to: string,
+  o: {
+    method: "spei" | "usdt" | "card";
+    amount: string;
+    reference: string;
+    depositUrl: string;
+    clabe?: string;
+    bank?: string;
+    beneficiary?: string;
+    usdtAmount?: string;
+    usdtAddress?: string;
+    usdtNetwork?: string;
+  },
+) {
+  return send(to, t.depositRequested(o));
+}
+
+export function sendPersonalClabeReady(to: string, o: { clabe: string; beneficiary: string; url: string }) {
+  return send(to, t.personalClabeReady(o));
+}
+
+// ─── Números virtuales ───────────────────────────────────────────────────────
+
+export function sendPhoneNumberReady(to: string, o: { number: string; monthly: string; renewsAt: Date; url: string }) {
+  return send(to, t.phoneNumberReady(o));
+}
+
+export function sendSmsReceived(to: string, o: { number: string; from: string; body: string; url: string }) {
+  return send(to, t.smsReceived(o));
+}
+
+export function sendPhoneNumberRenewalFailed(to: string, o: { number: string; amount: string; graceUntil: Date; url: string }) {
+  return send(to, t.phoneNumberRenewalFailed(o));
 }

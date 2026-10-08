@@ -5,7 +5,7 @@ import type { Order } from "@/db/schema";
 import { listTopupPackages, queryEsim, topupEsim, toUsd } from "./esimaccess";
 import { adjustBalance } from "./wallet";
 import { getActivePlans } from "./catalog";
-import { sendAutoTopupDone, sendAutoTopupNoFunds, sendLowData, sendExpiringSoon } from "./email";
+import { sendAutoTopupDone, sendAutoTopupNoFunds, sendLowData, sendExpiringSoon, sendTopupApplied } from "./email";
 import { formatMxn } from "./pricing";
 
 const GB = 1024 ** 3;
@@ -74,6 +74,17 @@ export async function applyTopup(order: Order, planId: string, opts: { auto?: bo
         updatedAt: new Date(),
       })
       .where(eq(schema.orders.id, order.id));
+    if (!opts.auto) {
+      const user = await db.query.users.findFirst({ where: eq(schema.users.id, order.userId) });
+      if (user) {
+        await sendTopupApplied(user.email, {
+          planName: order.planName,
+          topupName: option.name,
+          amount: formatMxn(priceCents),
+          orderId: order.id,
+        });
+      }
+    }
     return { ok: true };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Error del proveedor";

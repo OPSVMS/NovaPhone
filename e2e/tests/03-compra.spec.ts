@@ -1,18 +1,14 @@
 import { test, expect } from "@playwright/test";
-import { register, requestDeposit, creditSpei, buyPlan, scrollThrough } from "./helpers";
+import { register, requestDeposit, buyPlan, scrollThrough, fundAccount, clabeOf, speiToClabe } from "./helpers";
 
 test.describe("Flujo completo de compra", () => {
-  test("depósito SPEI → acreditación → compra 20 GB → eSIM lista con QR → movimientos", async ({ page, request }) => {
+  test("SPEI a CLABE personal → acreditación → compra 20 GB → eSIM lista con QR → movimientos", async ({ page }) => {
     await register(page, { name: "Carlos Compra" });
     await expect(page.getByText(/\$0/).filter({ visible: true }).first()).toBeVisible();
 
-    const { reference } = await requestDeposit(page, 700);
-    await expect(page.getByText("Esperando tu pago")).toBeVisible();
-    await expect(page.getByText("646 180 00000000000 0")).toBeVisible();
-
-    await creditSpei(request, reference, 700);
-    await page.reload();
-    await expect(page.getByText(/acreditad|listo|Recibimos/i).filter({ visible: true }).first()).toBeVisible();
+    const clabe = await clabeOf(page);
+    const r = await speiToClabe(clabe, 700);
+    expect(r.callback?.json.result).toBe("credited");
 
     await page.goto("/app");
     await expect(page.getByText("$700").filter({ visible: true }).first()).toBeVisible();
@@ -49,13 +45,14 @@ test.describe("Flujo completo de compra", () => {
     await expect(page.getByText("Te faltan $599").filter({ visible: true }).first()).toBeVisible();
     await page.locator('a[href="/app/fondos?monto=600"]').filter({ visible: true }).first().click();
     await expect(page).toHaveURL(/\/app\/fondos\?monto=600/);
-    await expect(page.locator('input[name="amount"]')).toHaveValue("600");
+    // Con CLABE personal se transfiere cualquier monto; en Tarjeta el monto faltante ya viene precargado.
+    await page.getByRole("radio", { name: /Tarjeta/ }).click();
+    await expect(page.getByRole("region", { name: "Tarjeta" }).locator('input[name="amount"]')).toHaveValue("600");
   });
 
   test("falla del proveedor: reembolsa el saldo automáticamente", async ({ page, request }) => {
     await register(page);
-    const { reference } = await requestDeposit(page, 200);
-    await creditSpei(request, reference, 200);
+    await fundAccount(page, request, 200);
     await page.goto("/app/comprar?plan=MX_2_7");
     await page.getByRole("button", { name: /^Comprar/ }).filter({ visible: true }).first().click();
     const dialog = page.getByRole("dialog");

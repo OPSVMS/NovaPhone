@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { Logo } from "@/components/brand/logo";
+import { Logo, LogoMark } from "@/components/brand/logo";
 import { Aurora } from "@/components/motion/aurora";
 import { Badge } from "@/components/ui/badge";
 import { requireAdmin } from "@/lib/session";
 import { UserMenu } from "@/components/app/user-menu";
+import { AdminNav } from "@/components/app/admin-nav";
 
 export const metadata = { title: "Admin", robots: { index: false, follow: false } };
 
@@ -19,9 +20,12 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
         <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
             <Link href="/admin" aria-label="Panel de admin" className="rounded-control">
-              <Logo size={22} title={null} />
+              <Logo size={22} title={null} className="max-sm:hidden" />
+              <LogoMark size={28} title={null} className="sm:hidden" />
             </Link>
             <Badge variant="primary">Admin</Badge>
+            <div className="ml-1 hidden h-6 w-px bg-border sm:block" aria-hidden />
+            <AdminNav />
           </div>
           <div className="flex items-center gap-2">
             <Link

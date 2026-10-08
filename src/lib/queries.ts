@@ -1,5 +1,5 @@
 import "server-only";
-import { and, count, desc, eq, inArray, sum } from "drizzle-orm";
+import { and, count, desc, eq, inArray, ne, sum } from "drizzle-orm";
 import { db, schema } from "@/db";
 
 /* ---------------------------------- Usuario --------------------------------- */
@@ -43,7 +43,7 @@ export async function getAdminStats() {
     db
       .select({ n: count(), cents: sum(schema.deposits.amountCents) })
       .from(schema.deposits)
-      .where(eq(schema.deposits.status, "pending")),
+      .where(and(eq(schema.deposits.status, "pending"), ne(schema.deposits.method, "card"))),
   ]);
   const revenueCents = Number(sold.revenueCents ?? 0);
   const costCents = Math.round(Number(sold.costUsd ?? 0) * fx * 100);
@@ -74,7 +74,7 @@ export async function getPendingDeposits(limit = 50) {
     })
     .from(schema.deposits)
     .innerJoin(schema.users, eq(schema.users.id, schema.deposits.userId))
-    .where(eq(schema.deposits.status, "pending"))
+    .where(and(eq(schema.deposits.status, "pending"), ne(schema.deposits.method, "card")))
     .orderBy(desc(schema.deposits.createdAt))
     .limit(limit);
 }

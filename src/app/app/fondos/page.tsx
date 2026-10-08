@@ -1,85 +1,88 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ChevronRight, Landmark, ShieldCheck } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { CopyField } from "@/components/app/copy-field";
 import { requireUser } from "@/lib/session";
 import { getUserDeposits, MAX_DEPOSIT_MXN, MIN_DEPOSIT_MXN } from "@/lib/deposits";
+import { ensureClabe } from "@/lib/novacore";
+import { openpayEnabled } from "@/lib/openpay";
 import { formatMxn } from "@/lib/pricing";
 import { Card } from "@/components/ui/card";
 import { FadeIn } from "@/components/motion/fade-in";
 import { PageHeader } from "@/components/app/page-header";
-import { DepositForm } from "@/components/app/deposit-form";
+import { FundsMethods, type FundsMethod } from "@/components/app/funds-methods";
+import type { CardFeeConfig } from "@/components/app/card-fee";
 import { DepositStatusBadge, methodLabel } from "@/components/app/status-badges";
 import { formatDateTime } from "@/components/app/format";
 
 export const metadata: Metadata = { title: "Agregar fondos" };
 
+const CARD_MAX_MXN = 20_000;
+
+/** Misma configuración que `cardFeeCents` en src/lib/openpay.ts. */
+const cardFeeConfig = (): CardFeeConfig => ({
+  pct: Number(process.env.OPENPAY_FEE_PCT ?? 2.9),
+  fixedMxn: Number(process.env.OPENPAY_FEE_FIXED ?? 2.5),
+  pass: process.env.OPENPAY_PASS_FEES !== "false",
+});
+
+/** CLABE personal; la asigna en NOVACORE la primera vez (si está configurado). */
+async function personalClabe(user: { id: string; name: string; email: string }) {
+  const account = await db.query.users.findFirst({ where: eq(schema.users.id, user.id), columns: { clabe: true } });
+  if (account?.clabe) return account.clabe;
+  try {
+    // No bloquear la página si NOVACORE tarda: se reintenta en la siguiente visita.
+    return await Promise.race([
+      ensureClabe({ ...user, clabe: null }),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 6_000)),
+    ]);
+  } catch (e) {
+    console.error("ensureClabe", e);
+    return null;
+  }
+}
+
+function parseMethod(v: unknown): FundsMethod {
+  if (v === "usdt") return "usdt";
+  if (v === "card" || v === "tarjeta") return "card";
+  return "spei";
+}
+
 export default async function FundsPage({ searchParams }: PageProps<"/app/fondos">) {
   const [user, sp] = await Promise.all([requireUser(), searchParams]);
-  const [deposits, account] = await Promise.all([
-    getUserDeposits(user.id),
-    db.query.users.findFirst({ where: eq(schema.users.id, user.id), columns: { clabe: true } }),
-  ]);
+  const [deposits, clabe] = await Promise.all([getUserDeposits(user.id), personalClabe(user)]);
 
   const monto = Number(typeof sp.monto === "string" ? sp.monto : NaN);
   const defaultAmount =
     Number.isFinite(monto) && monto > 0 ? Math.min(MAX_DEPOSIT_MXN, Math.max(MIN_DEPOSIT_MXN, Math.ceil(monto))) : undefined;
-  const defaultMethod = sp.metodo === "usdt" ? "usdt" : "spei";
 
   return (
     <div className="flex flex-col gap-8 sm:gap-10">
       <PageHeader
         title="Agregar fondos"
-        description="Recarga tu saldo y úsalo para comprar planes al instante."
+        description={
+          defaultAmount
+            ? `Te sugerimos agregar ${formatMxn(defaultAmount * 100)} para completar tu compra.`
+            : "Recarga tu saldo y úsalo para comprar planes al instante."
+        }
       />
 
-      {account?.clabe ? (
-        <FadeIn immediate>
-          <Card className="flex flex-col gap-4 p-5 sm:p-7">
-            <div className="flex items-start gap-3">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-border bg-surface-2 text-lavender">
-                <Landmark aria-hidden className="size-5" />
-              </span>
-              <div className="flex flex-col gap-1">
-                <h2 className="font-semibold text-fg">Tu CLABE personal</h2>
-                <p className="text-[13px] leading-relaxed text-muted">
-                  Transfiere cualquier monto a esta CLABE y se suma a tu saldo automáticamente, sin referencia. Puedes
-                  programar una transferencia mensual en tu banco y activar la auto-recarga en tu eSIM para nunca quedarte sin datos.
-                </p>
-              </div>
-            </div>
-            <CopyField label="CLABE" value={account.clabe} copyLabel="Copiar CLABE" />
-          </Card>
-        </FadeIn>
-      ) : null}
-
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_260px] lg:items-start">
-        <FadeIn immediate>
-          <Card className="p-5 sm:p-7">
-            <DepositForm
-              defaultAmount={defaultAmount}
-              defaultMethod={defaultMethod}
-              min={MIN_DEPOSIT_MXN}
-              max={MAX_DEPOSIT_MXN}
-            />
-          </Card>
-        </FadeIn>
-        <aside className="flex flex-col gap-3 rounded-card border border-border bg-surface/50 p-5 text-[13px] leading-relaxed text-muted">
-          <p className="flex items-center gap-2 font-medium text-fg">
-            <ShieldCheck aria-hidden className="size-4 text-lavender" /> Cómo funciona
-          </p>
-          <ol className="flex list-decimal flex-col gap-1.5 pl-4 marker:text-subtle">
-            <li>Elige método y monto.</li>
-            <li>Te damos los datos exactos para pagar.</li>
-            <li>Tu saldo se acredita en cuanto confirmamos el pago.</li>
-          </ol>
-          {defaultAmount ? (
-            <p className="text-subtle">Te sugerimos {formatMxn(defaultAmount * 100)} para completar tu compra.</p>
-          ) : null}
-        </aside>
-      </div>
+      <FadeIn immediate>
+        <Card className="p-5 sm:p-7">
+          <FundsMethods
+            initialMethod={parseMethod(sp.metodo)}
+            clabe={clabe}
+            beneficiary={process.env.SPEI_BENEFICIARY || "MACAIBA COMMERCE"}
+            cardEnabled={openpayEnabled()}
+            fee={cardFeeConfig()}
+            defaultAmount={defaultAmount}
+            min={MIN_DEPOSIT_MXN}
+            max={MAX_DEPOSIT_MXN}
+            cardMax={CARD_MAX_MXN}
+          />
+        </Card>
+      </FadeIn>
 
       <section aria-labelledby="history" className="flex flex-col gap-3">
         <h2 id="history" className="text-lg font-semibold text-fg">

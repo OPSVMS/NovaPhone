@@ -56,12 +56,12 @@ export const plans = pgTable("plans", {
 export const deposits = pgTable("deposits", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").notNull().references(() => users.id),
-  method: text("method").$type<"spei" | "usdt" | "manual">().notNull(),
+  method: text("method").$type<"spei" | "usdt" | "manual" | "card">().notNull(),
   amountCents: integer("amount_cents").notNull(),
   /** Para USDT: monto exacto esperado (con decimales únicos). */
   expectedUsdt: numeric("expected_usdt", { mode: "string" }),
   reference: text("reference").notNull(),
-  status: text("status").$type<"pending" | "completed" | "expired" | "cancelled">().notNull().default("pending"),
+  status: text("status").$type<"pending" | "completed" | "expired" | "cancelled" | "returned">().notNull().default("pending"),
   externalId: text("external_id"),
   meta: jsonb("meta").$type<Record<string, unknown>>(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -128,6 +128,39 @@ export const topups = pgTable("topups", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("topups_order_idx").on(t.orderId)]);
 
+/** Inventario de números virtuales (p. ej. cloudnumbering) y su asignación a usuarios. */
+export const phoneNumbers = pgTable("phone_numbers", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  /** Formato E.164, ej. +447700900123 */
+  e164: text("e164").notNull(),
+  country: text("country").notNull().default("GB"),
+  provider: text("provider").notNull().default("cloudnumbering"),
+  providerRef: text("provider_ref"),
+  status: text("status").$type<"available" | "assigned" | "cooldown" | "retired">().notNull().default("available"),
+  userId: uuid("user_id").references(() => users.id),
+  /** eSIM a la que el cliente ligó el número (opcional, informativo). */
+  orderId: uuid("order_id").references(() => orders.id),
+  monthlyPriceCents: integer("monthly_price_cents"),
+  assignedAt: timestamp("assigned_at", { withTimezone: true }),
+  renewsAt: timestamp("renews_at", { withTimezone: true }),
+  graceUntil: timestamp("grace_until", { withTimezone: true }),
+  autoRenew: boolean("auto_renew").notNull().default(true),
+  /** No se reasigna antes de esta fecha (evita heredar cuentas de WhatsApp). */
+  cooldownUntil: timestamp("cooldown_until", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex("phone_numbers_e164_idx").on(t.e164), index("phone_numbers_user_idx").on(t.userId)]);
+
+export const smsMessages = pgTable("sms_messages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  numberId: uuid("number_id").notNull().references(() => phoneNumbers.id),
+  userId: uuid("user_id").references(() => users.id),
+  fromNumber: text("from_number").notNull(),
+  toNumber: text("to_number").notNull(),
+  body: text("body").notNull(),
+  externalId: text("external_id"),
+  receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("sms_number_idx").on(t.numberId, t.receivedAt), uniqueIndex("sms_external_idx").on(t.externalId)]);
+
 /** Eventos de webhooks ya procesados (deduplicación por notifyId). */
 export const webhookEvents = pgTable("webhook_events", {
   id: text("id").primaryKey(),
@@ -147,3 +180,5 @@ export type Plan = typeof plans.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type Deposit = typeof deposits.$inferSelect;
 export type Topup = typeof topups.$inferSelect;
+export type PhoneNumber = typeof phoneNumbers.$inferSelect;
+export type SmsMessage = typeof smsMessages.$inferSelect;

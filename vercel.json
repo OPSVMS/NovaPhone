@@ -3,6 +3,8 @@
   "framework": "nextjs",
   "crons": [
     { "path": "/api/cron/sync-catalog", "schedule": "0 12 * * *" },
-    { "path": "/api/cron/sync-usage", "schedule": "0 */3 * * *" }
+    { "path": "/api/cron/sync-usage", "schedule": "0 */3 * * *" },
+    { "path": "/api/cron/numbers", "schedule": "0 */6 * * *" },
+    { "path": "/api/cron/novacore", "schedule": "* * * * *" }
   ]
 }

@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useRef, useState } from "react";
 import Link from "next/link";
 import { Eye, EyeOff, Lock, Mail, User } from "lucide-react";
-import { login, register, type FormState } from "@/app/actions/auth";
+import { login, register, requestPasswordReset, resendPasswordReset, resetPassword, type FormState } from "@/app/actions/auth";
+import { OTP_LENGTH, OtpInput, ResendCode, emptyOtp } from "@/components/app/otp-form";
 import { Field } from "@/components/ui/field";
 import { Alert } from "@/components/ui/alert";
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -60,6 +61,14 @@ export function LoginForm({ next }: { next?: string }) {
         onChange={(e) => setPassword(e.target.value)}
         aria-invalid={state?.error ? true : undefined}
       />
+      <div className="-mt-2 flex justify-end">
+        <Link
+          href={email.includes("@") ? `/recuperar?email=${encodeURIComponent(email.trim())}` : "/recuperar"}
+          className="text-[13px] font-medium text-lavender underline-offset-4 hover:text-lavender-soft hover:underline"
+        >
+          ¿Olvidaste tu contraseña?
+        </Link>
+      </div>
       <SubmitButton fullWidth size="lg" pendingText="Entrando…">
         Entrar
       </SubmitButton>
@@ -137,5 +146,100 @@ export function RegisterForm({ next }: { next?: string }) {
         .
       </p>
     </form>
+  );
+}
+
+export function ResetRequestForm({ defaultEmail = "" }: { defaultEmail?: string }) {
+  const [state, action] = useActionState<FormState, FormData>(requestPasswordReset, undefined);
+  const [email, setEmail] = useState(defaultEmail);
+
+  return (
+    <form action={action} className="flex flex-col gap-5">
+      {state?.error ? <Alert variant="error">{state.error}</Alert> : null}
+      <Field
+        label="Correo de tu cuenta"
+        name="email"
+        type="email"
+        autoComplete="email"
+        inputMode="email"
+        autoCapitalize="none"
+        spellCheck={false}
+        required
+        autoFocus
+        placeholder="tu@correo.com"
+        leading={<Mail />}
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+      />
+      <SubmitButton fullWidth size="lg" pendingText="Enviando código…">
+        Enviar código
+      </SubmitButton>
+    </form>
+  );
+}
+
+export function ResetPasswordForm({ email }: { email: string }) {
+  const [digits, setDigits] = useState<string[]>(emptyOtp);
+  const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const passwordRef = useRef<HTMLInputElement>(null);
+  const [password, setPassword] = useState("");
+  const [shown, setShown] = useState(false);
+  const [state, action, pending] = useActionState<FormState, FormData>(async (prev, formData) => {
+    const res = await resetPassword(prev, formData);
+    if (res?.error && /código/i.test(res.error)) {
+      setDigits(emptyOtp());
+      requestAnimationFrame(() => otpRefs.current[0]?.focus());
+    }
+    return res;
+  }, undefined);
+  const code = digits.join("");
+  const short = password.length > 0 && password.length < 8;
+
+  return (
+    <div className="flex flex-col gap-6">
+      <form action={action} className="flex flex-col gap-5">
+        <input type="hidden" name="email" value={email} />
+        <input type="hidden" name="code" value={code} />
+        {state?.error ? <Alert variant="error">{state.error}</Alert> : null}
+        <fieldset className="flex flex-col gap-2">
+          <legend className="mb-2 text-sm font-medium text-fg">Código de 6 dígitos</legend>
+          <OtpInput
+            digits={digits}
+            onDigitsChange={setDigits}
+            onComplete={() => requestAnimationFrame(() => passwordRef.current?.focus())}
+            disabled={pending}
+            invalid={!!state?.error && /código/i.test(state.error)}
+            inputRefs={otpRefs}
+            label="Código para restablecer tu contraseña"
+          />
+        </fieldset>
+        <Field
+          ref={passwordRef}
+          label="Contraseña nueva"
+          name="password"
+          type={shown ? "text" : "password"}
+          autoComplete="new-password"
+          required
+          minLength={8}
+          maxLength={128}
+          placeholder="Mínimo 8 caracteres"
+          leading={<Lock />}
+          trailing={<PasswordToggle shown={shown} onToggle={() => setShown((s) => !s)} />}
+          hint={short ? `Te faltan ${8 - password.length} caracteres` : "Mínimo 8 caracteres."}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+        <SubmitButton fullWidth size="lg" disabled={code.length !== OTP_LENGTH || password.length < 8} pendingText="Guardando…">
+          Guardar y entrar
+        </SubmitButton>
+      </form>
+      <ResendCode
+        onResend={() => resendPasswordReset(email)}
+        onSent={() => {
+          setDigits(emptyOtp());
+          otpRefs.current[0]?.focus();
+        }}
+      />
+    </div>
   );
 }

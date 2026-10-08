@@ -17,11 +17,11 @@ test.describe("API y webhooks", () => {
     expect(missing.status()).toBe(404);
 
     await register(page);
-    const { reference } = await requestDeposit(page, 150);
-    const externalId = `SPEI-${randomUUID()}`;
-    const first = await signedDeposit(request, { method: "spei", reference, amountMxn: 150, externalId });
+    const { usdt } = await requestDeposit(page, 150, "usdt");
+    const externalId = `0x${randomUUID()}`;
+    const first = await signedDeposit(request, { method: "usdt", amountUsdt: usdt, externalId });
     expect((await first.json()).credited).toBe(true);
-    const again = await signedDeposit(request, { method: "spei", reference, amountMxn: 150, externalId });
+    const again = await signedDeposit(request, { method: "usdt", amountUsdt: usdt, externalId });
     expect((await again.json()).duplicate).toBe(true);
     await page.goto("/app");
     await expect(page.getByText("$150").filter({ visible: true }).first()).toBeVisible();
