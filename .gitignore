@@ -41,7 +41,7 @@ yarn-error.log*
 next-env.d.ts
 
 !.env.example
-esims/
+/esims/
 e2e/node_modules
 e2e/test-results
 e2e/playwright-report
