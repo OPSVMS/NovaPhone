@@ -1,12 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { claimNonce, creditNovacoreDeposit, verifyNovacoreSignature, type NovacoreDeposit } from "@/lib/novacore";
+import { checkNovacoreSignature, claimNonce, creditNovacoreDeposit, type NovacoreDeposit } from "@/lib/novacore";
 
 /** Aviso de depósito SPEI de NOVACORE (se envía una sola vez; responder 200 en < 10 s). */
 export async function POST(req: NextRequest) {
   const raw = await req.text();
   const ts = req.headers.get("x-novacore-timestamp");
   const nonce = req.headers.get("x-novacore-nonce");
-  if (!verifyNovacoreSignature(raw, ts, nonce, req.headers.get("x-novacore-signature"))) {
+  const check = checkNovacoreSignature(raw, ts, nonce, req.headers.get("x-novacore-signature"));
+  if (!check.ok) {
+    console.error("NOVACORE aviso rechazado:", check.reason, "keyPrefix:", req.headers.get("x-novacore-apikey-prefix"), "body:", raw.slice(0, 160));
     return NextResponse.json({ ok: false, error: "invalid signature" }, { status: 401 });
   }
   if (!(await claimNonce(nonce!))) return NextResponse.json({ ok: false, error: "replayed nonce" }, { status: 409 });

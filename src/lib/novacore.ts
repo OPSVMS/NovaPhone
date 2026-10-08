@@ -79,13 +79,28 @@ const SETTLED = new Set(["scattered", "completed"]);
 const IN_PROGRESS = new Set(["pending", "pending_confirmation", "queued"]);
 const NOT_CREDITED = new Set(["failed", "canceled", "cancelled"]);
 
-/** Verifica la firma del aviso: HMAC-SHA256(CALLBACK_SECRET, "{ts}.{nonce}.{rawBody}") en hex. */
-export function verifyNovacoreSignature(raw: string, ts: string | null, nonce: string | null, sig: string | null) {
+/**
+ * Verifica la firma del aviso: HMAC-SHA256(CALLBACK_SECRET, "{ts}.{nonce}.{rawBody}") en hex.
+ * Regresa el motivo del rechazo (sin exponer secretos) para poder diagnosticar.
+ */
+export function checkNovacoreSignature(raw: string, ts: string | null, nonce: string | null, sigHeader: string | null) {
   const secret = process.env.NOVACORE_CALLBACK_SECRET;
-  if (!secret || !ts || !nonce || !sig) return false;
-  if (Math.abs(Date.now() / 1000 - Number(ts)) > 300) return false;
+  if (!secret) return { ok: false, reason: "callback-secret-not-configured" };
+  if (!ts || !nonce || !sigHeader) return { ok: false, reason: `missing-headers ts=${!!ts} nonce=${!!nonce} sig=${!!sigHeader}` };
+  // Tolerancia: timestamp en milisegundos y firma con prefijo "sha256=".
+  const tsNum = Number(ts) > 1e12 ? Number(ts) / 1000 : Number(ts);
+  const skew = Math.round(Date.now() / 1000 - tsNum);
+  if (!Number.isFinite(skew) || Math.abs(skew) > 300) return { ok: false, reason: `timestamp-skew ${skew}s ts=${ts}` };
+  const sig = sigHeader.trim().replace(/^sha256=/i, "").toLowerCase();
   const expected = createHmac("sha256", secret).update(`${ts}.${nonce}.${raw}`).digest("hex");
-  return expected.length === sig.length && timingSafeEqual(Buffer.from(expected), Buffer.from(sig));
+  const ok = expected.length === sig.length && timingSafeEqual(Buffer.from(expected), Buffer.from(sig));
+  return ok
+    ? { ok: true, reason: "ok" }
+    : { ok: false, reason: `signature-mismatch sigLen=${sig.length} bodyLen=${raw.length} secretPrefix=${secret.slice(0, 4)}` };
+}
+
+export function verifyNovacoreSignature(raw: string, ts: string | null, nonce: string | null, sig: string | null) {
+  return checkNovacoreSignature(raw, ts, nonce, sig).ok;
 }
 
 /** Registra el nonce; false si ya se había usado (repetición). */
