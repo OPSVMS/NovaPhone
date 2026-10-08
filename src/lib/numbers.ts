@@ -31,6 +31,13 @@ export async function getMessages(numberId: string, userId: string, limit = 50) 
   });
 }
 
+/** Hay número disponible (en inventario o comprable al momento en cloudnumbering). */
+export async function canSellNumber() {
+  if ((await availableCount()) > 0) return true;
+  const { cloudnumberingEnabled } = await import("./cloudnumbering");
+  return cloudnumberingEnabled();
+}
+
 export async function availableCount() {
   const [row] = await db
     .select({ n: dsql<number>`count(*)::int` })
@@ -47,7 +54,10 @@ export async function availableCount() {
 type AssignResult = { ok: true; number: PhoneNumber } | { ok: false; error: string; code: "funds" | "none" | "has" };
 
 /** Asigna un número del inventario al usuario. `charge=false` para asignaciones manuales del admin. */
-export async function assignNumber(user: { id: string; email: string }, opts: { charge?: boolean; orderId?: string | null; e164?: string } = {}): Promise<AssignResult> {
+export async function assignNumber(
+  user: { id: string; email: string },
+  opts: { charge?: boolean; orderId?: string | null; e164?: string; noProvision?: boolean } = {},
+): Promise<AssignResult> {
   if (await getUserNumber(user.id)) return { ok: false, error: "Ya tienes un número NovaPhone.", code: "has" };
   const priceCents = NUMBER_PRICE_MXN() * 100;
 
@@ -86,6 +96,14 @@ export async function assignNumber(user: { id: string; email: string }, opts: { 
       )
       .returning();
     if (claimed) break;
+  }
+  if (!claimed && !opts.e164 && !opts.noProvision) {
+    // Sin inventario: compra uno al momento en cloudnumbering y vuelve a intentar.
+    const { cloudnumberingEnabled, purchaseNumbers } = await import("./cloudnumbering");
+    if (cloudnumberingEnabled()) {
+      const bought = await purchaseNumbers(1).catch((e) => (console.error("auto-provision", e), null));
+      if (bought?.added.length) return assignNumber(user, { ...opts, noProvision: true });
+    }
   }
   if (!claimed) return { ok: false, error: "Por ahora no hay números disponibles. Te avisaremos en cuanto haya.", code: "none" };
 
@@ -165,6 +183,7 @@ export async function retryRenewalFor(userId: string) {
 /** SMS entrante desde el proveedor. Idempotente por externalId. */
 export async function storeInboundSms(input: { to: string; from: string; body: string; externalId?: string }) {
   const to = normalizeE164(input.to);
+  if (!/^\+\d{8,15}$/.test(to)) return { result: "unknown-number" as const };
   const number = await db.query.phoneNumbers.findFirst({ where: eq(schema.phoneNumbers.e164, to) });
   if (!number) return { result: "unknown-number" as const };
   const [msg] = await db

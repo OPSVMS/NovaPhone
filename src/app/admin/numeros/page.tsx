@@ -8,7 +8,8 @@ import { Card } from "@/components/ui/card";
 import { Stat } from "@/components/ui/stat";
 import { Stagger, StaggerItem } from "@/components/motion/stagger";
 import { InventoryStatusBadge } from "@/components/app/status-badges";
-import { AddNumbersForm, AssignNumberForm, ReleaseNumberButton, TestSmsForm } from "@/components/app/admin-numbers";
+import { AddNumbersForm, AssignNumberForm, CloudnumberingPanel, ReleaseNumberButton, TestSmsForm } from "@/components/app/admin-numbers";
+import { cloudnumberingEnabled, getCloudnumberingBalance } from "@/lib/cloudnumbering";
 import { formatDate, formatDateTime, formatPhone } from "@/components/app/format";
 
 export const metadata: Metadata = { title: "Números · Admin" };
@@ -31,7 +32,14 @@ async function counts() {
 
 export default async function AdminNumbersPage() {
   await requireAdmin();
-  const [inventory, sms, available, stats] = await Promise.all([listInventory(), recentSms(30), availableCount(), counts()]);
+  const cnEnabled = cloudnumberingEnabled();
+  const [inventory, sms, available, stats, cnBalance] = await Promise.all([
+    listInventory(),
+    recentSms(30),
+    availableCount(),
+    counts(),
+    cnEnabled ? getCloudnumberingBalance().catch(() => null) : Promise.resolve(null),
+  ]);
 
   const userIds = [...new Set(inventory.map((n) => n.userId).filter((v): v is string => !!v))];
   const users = userIds.length
@@ -70,6 +78,8 @@ export default async function AdminNumbersPage() {
           </StaggerItem>
         ))}
       </Stagger>
+
+      <CloudnumberingPanel balance={cnBalance} enabled={cnEnabled} />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <AddNumbersForm />

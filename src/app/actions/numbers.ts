@@ -73,3 +73,33 @@ export async function getMyNumber() {
   const user = await requireUser();
   return getUserNumber(user.id);
 }
+
+/** Admin: compra números en cloudnumbering y los agrega al inventario. */
+export async function adminBuyNumbers(_: FormState, form: FormData): Promise<FormState> {
+  await requireAdmin();
+  const { cloudnumberingEnabled, purchaseNumbers } = await import("@/lib/cloudnumbering");
+  if (!cloudnumberingEnabled()) return { error: "cloudnumbering no está configurado." };
+  const amount = Math.min(20, Math.max(1, Number(form.get("amount") ?? 1)));
+  try {
+    const r = await purchaseNumbers(amount, String(form.get("country") ?? "GB"));
+    revalidatePath("/admin/numeros");
+    return { ok: `Compraste ${r.added.length} número(s) por ${r.cost} ${r.currency}: ${r.added.join(", ")}` };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "No se pudo comprar." };
+  }
+}
+
+/** Admin: importa los números de la cuenta de cloudnumbering y asegura el ruteo de SMS a NovaPhone. */
+export async function adminSyncCloudnumbering(prev: FormState): Promise<FormState> {
+  void prev;
+  await requireAdmin();
+  const { cloudnumberingEnabled, syncCloudnumberingInventory } = await import("@/lib/cloudnumbering");
+  if (!cloudnumberingEnabled()) return { error: "cloudnumbering no está configurado." };
+  try {
+    const r = await syncCloudnumberingInventory();
+    revalidatePath("/admin/numeros");
+    return { ok: `${r.imported} número(s) importados, ${r.routed} re-ruteados a NovaPhone.` };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "No se pudo sincronizar." };
+  }
+}

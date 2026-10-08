@@ -51,6 +51,9 @@ services:
       OPENPAY_PRIVATE_KEY: "sk_test_openpay"
       SMS_WEBHOOK_TOKEN: "test-sms-token"
       PHONE_NUMBER_PRICE_MXN: "79"
+      CLOUDNUMBERING_BASE_URL: "http://mock:4010/cn/v1.1"
+      CLOUDNUMBERING_CLIENT_ID: "test-cn-id"
+      CLOUDNUMBERING_CLIENT_SECRET: "test-cn-secret"
     depends_on:
       neon-proxy: { condition: service_started }
       mock: { condition: service_healthy }

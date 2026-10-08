@@ -1,8 +1,8 @@
 "use client";
 
 import { useActionState, useId, useRef, useState } from "react";
-import { Send, Unlink, Upload, UserPlus } from "lucide-react";
-import { adminAddNumbers, adminAssignNumber, adminReleaseNumber, adminTestSms } from "@/app/actions/numbers";
+import { Cloud, Send, Unlink, Upload, UserPlus } from "lucide-react";
+import { adminAddNumbers, adminAssignNumber, adminBuyNumbers, adminReleaseNumber, adminSyncCloudnumbering, adminTestSms } from "@/app/actions/numbers";
 import type { FormState } from "@/app/actions/auth";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -214,5 +214,65 @@ export function ReleaseNumberButton({ numberId, e164, email }: { numberId: strin
         </Dialog>
       </form>
     </>
+  );
+}
+
+/** Panel de la cuenta de cloudnumbering: saldo, compra automática y sincronización. */
+export function CloudnumberingPanel({ balance, enabled }: { balance: { balance: number; currency: string } | null; enabled: boolean }) {
+  const [buyState, buyAction] = useActionState<FormState, FormData>(adminBuyNumbers, undefined);
+  const [syncState, syncAction] = useActionState<FormState, FormData>(adminSyncCloudnumbering, undefined);
+  const id = useId();
+  const low = balance !== null && balance.balance < 20;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Cloud aria-hidden className="size-4 text-lavender" /> Cuenta cloudnumbering
+        </CardTitle>
+        <CardDescription>
+          {!enabled
+            ? "Configura CLOUDNUMBERING_CLIENT_ID y CLOUDNUMBERING_CLIENT_SECRET."
+            : balance
+              ? (
+                  <span className={low ? "text-warning" : undefined}>
+                    Saldo: {balance.balance.toFixed(2)} {balance.currency}
+                    {low ? " · recarga pronto: las renovaciones mensuales se cobran de este saldo" : ""}
+                  </span>
+                )
+              : "No se pudo leer el saldo."}
+        </CardDescription>
+      </CardHeader>
+      {enabled ? (
+        <CardContent className="flex flex-col gap-4">
+          <p className="text-[13px] leading-relaxed text-muted">
+            Si un cliente pide número y no hay inventario, se compra uno al momento (Reino Unido, plan mensual). Aquí puedes
+            comprar por adelantado o importar los números que compraste en el portal.
+          </p>
+          <form action={buyAction} className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={`${id}-amount`}>Cantidad</Label>
+              <Input id={`${id}-amount`} name="amount" type="number" min={1} max={20} defaultValue={1} className="w-24" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={`${id}-country`}>País</Label>
+              <Select id={`${id}-country`} name="country" defaultValue="GB">
+                <option value="GB">Reino Unido (+44 7)</option>
+                <option value="AU">Australia (+61 4)</option>
+              </Select>
+            </div>
+            <SubmitButton pendingText="Comprando…">Comprar números</SubmitButton>
+          </form>
+          {buyState?.ok ? <Alert variant="success">{buyState.ok}</Alert> : null}
+          {buyState?.error ? <Alert variant="error">{buyState.error}</Alert> : null}
+          <form action={syncAction}>
+            <SubmitButton variant="secondary" size="sm" pendingText="Sincronizando…">
+              Sincronizar cuenta
+            </SubmitButton>
+          </form>
+          {syncState?.ok ? <Alert variant="success">{syncState.ok}</Alert> : null}
+          {syncState?.error ? <Alert variant="error">{syncState.error}</Alert> : null}
+        </CardContent>
+      ) : null}
+    </Card>
   );
 }

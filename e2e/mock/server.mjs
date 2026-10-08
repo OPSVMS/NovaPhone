@@ -21,6 +21,36 @@ async function sendNcCallback(dep, opts = {}) {
   return { status: r.status, json: await r.json().catch(() => ({})) };
 }
 
+// ---------- cloudnumbering API v1.1 ----------
+const cnEndpoints = [];
+const cnNumbers = [];
+let cnSeq = 100;
+function cnHandle(req, url, raw) {
+  const p = url.pathname.replace("/cn/v1.1", "");
+  const auth = req.headers.authorization;
+  if (p === "/oauth/token") {
+    if (url.searchParams.get("client_id") !== "test-cn-id" || url.searchParams.get("client_secret") !== "test-cn-secret") return [401, { success: false }];
+    return [200, { access_token: "cn-token", accessToken: "cn-token", expires_in: 7200 }];
+  }
+  if (auth !== "Bearer cn-token") return [401, { success: false, error: "unauthorized" }];
+  const body = raw ? JSON.parse(raw) : {};
+  if (p === "/organisation") return [200, { success: true, result: { balance: 300, currency: "GBP" } }];
+  if (p === "/endpoints" && req.method === "GET") return [200, { success: true, result: { entries: cnEndpoints } }];
+  if (p === "/endpoints" && req.method === "POST") { const e = { sid: `EP${cnSeq++}`, ...body }; cnEndpoints.push(e); return [200, { success: true, result: { sid: e.sid } }]; }
+  if (p === "/number-groups") return [200, { success: true, result: { entries: [{ sid: "NGGB", countryIso: "GB", numberType: "LOCAL" }] } }];
+  if (p === "/catalogue") return [200, { success: true, result: { entries: [{ sid: "REGB1", countryIso: "GB", numberType: "LOCAL", terms: "MONTHLY", cost: 0.99, connectionCharge: 1, currency: "GBP" }] } }];
+  if (p === "/orders/preview") return [200, { success: true, result: { totalCost: 1.99 * body.amount, currency: "GBP", quoteToken: "q-123" } }];
+  if (p === "/orders" && req.method === "POST") {
+    if (body.quoteToken !== "q-123" || !req.headers["idempotency-key"]) return [400, { success: false, error: "bad order" }];
+    const numbers = Array.from({ length: body.amount }, () => { const n = { sid: `AN${cnSeq++}`, number: `+447428${String(500000 + cnSeq).padStart(6, "0")}`, countryIso: "GB", smsEndpointSid: "" }; cnNumbers.push(n); return { sid: n.sid, number: n.number }; });
+    return [200, { success: true, result: { sid: `NO${cnSeq++}`, numbers } }];
+  }
+  const m = p.match(/^\/numbers\/([^/]+)\/endpoints$/);
+  if (m) { const n = cnNumbers.find((x) => x.sid === m[1]); if (!n) return [200, { success: false, error: "not found" }]; n.smsEndpointSid = body.smsEndpointSid; return [200, { success: true, result: {} }]; }
+  if (p === "/numbers") return [200, { success: true, result: { entries: cnNumbers }, meta: { pagination: { page: 1, pageCount: 1 } } }];
+  return [404, { success: false, error: "Route not found" }];
+}
+
 // ---------- Openpay (cargos con redirección) ----------
 const charges = new Map();
 
@@ -109,6 +139,12 @@ http.createServer((req, res) => {
     res.setHeader("content-type", "application/json");
     if (url.pathname === "/fx") return res.end(JSON.stringify({ rates: { MXN: 18 } }));
     if (url.pathname === "/health") return res.end("{}");
+    if (url.pathname.startsWith("/cn/v1.1/")) {
+      const [code, json] = cnHandle(req, url, raw);
+      res.statusCode = code;
+      return res.end(JSON.stringify(json));
+    }
+    if (url.pathname === "/__test/cn/numbers") return res.end(JSON.stringify({ numbers: cnNumbers, endpoints: cnEndpoints }));
     // NOVACORE API
     if (url.pathname === "/api/integrations/clabes" && req.method === "POST") {
       if (!verifyNc(req, raw)) { res.statusCode = 401; return res.end(JSON.stringify({ error: "invalid signature" })); }

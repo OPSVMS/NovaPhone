@@ -16,7 +16,9 @@ export default defineConfig({
     locale: "es-MX",
   },
   projects: [
-    { name: "desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } } },
-    { name: "mobile", use: { ...devices["Pixel 7"] } },
+    { name: "desktop", testIgnore: /12-cloudnumbering/, use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } } },
+    { name: "mobile", testIgnore: /12-cloudnumbering/, use: { ...devices["Pixel 7"] } },
+    // Agota el inventario de números: corre al final, cuando ya no hay otras pruebas en paralelo.
+    { name: "provisioning", testMatch: /12-cloudnumbering/, dependencies: ["desktop", "mobile"], use: { ...devices["Desktop Chrome"] } },
   ],
 });

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { CalendarClock, Check, Info, Mail, MessageSquareText, ShieldCheck } from "lucide-react";
 import { requireUser } from "@/lib/session";
-import { availableCount, getMessages, getUserNumber, NUMBER_PRICE_MXN } from "@/lib/numbers";
+import { canSellNumber, getMessages, getUserNumber, NUMBER_PRICE_MXN } from "@/lib/numbers";
 import { getUserOrders } from "@/lib/orders";
 import { formatMxn } from "@/lib/pricing";
 import type { Order } from "@/db/schema";
@@ -33,7 +33,7 @@ export default async function NumberPage() {
 
   if (!number) {
     const priceCents = NUMBER_PRICE_MXN() * 100;
-    const available = await availableCount();
+    const available = (await canSellNumber()) ? 1 : 0;
     const esims = orders.filter((o) => o.status === "ready").map(esimOption);
     return <NoNumber priceCents={priceCents} balanceCents={user.balanceCents} esims={esims} soldOut={available === 0} />;
   }
