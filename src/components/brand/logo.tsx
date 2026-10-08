@@ -1,0 +1,137 @@
+import { useId, type SVGProps } from "react";
+import clsx from "clsx";
+
+/**
+ * NovaPhone brand mark — "Nodo".
+ * An N drawn as two identical, point-symmetric strokes (device ↔ network)
+ * that meet at a single point of light (the nova). Geometry lives on a
+ * 64×64 grid: 9u monoline, round caps/joins, 45° diagonal, 4.5u node.
+ */
+const MARK_A = "M13 51V13L24.22 24.22";
+const MARK_B = "M51 13V51L39.78 39.78";
+
+/** "NovaPhone" set in Sora SemiBold, −25 tracking, outlined (cap height = 730u). */
+const WORDMARK =
+  "M90 730V0H322.5L629.5 612H663L643 630V0H777V730H542.5L235.5 118H202L222 100V730ZM1181.5 749Q1110 749 1055 726Q1000 703 962 663.8Q924 624.5 904.5 574.5Q885 524.5 885 470V449Q885 393.5 905.2 342.8Q925.5 292 964 252.8Q1002.5 213.5 1057.5 190.8Q1112.5 168 1181.5 168Q1251 168 1305.8 190.8Q1360.5 213.5 1399 252.8Q1437.5 292 1457.8 342.8Q1478 393.5 1478 449V470Q1478 524.5 1458.5 574.5Q1439 624.5 1401 663.8Q1363 703 1308 726Q1253 749 1181.5 749ZM1181.5 630Q1232.5 630 1267.5 607.8Q1302.5 585.5 1320.8 546.8Q1339 508 1339 459.5Q1339 409.5 1320.2 370.8Q1301.5 332 1266.2 309.5Q1231 287 1181.5 287Q1132.5 287 1097 309.5Q1061.5 332 1042.8 370.8Q1024 409.5 1024 459.5Q1024 508 1042.2 546.8Q1060.5 585.5 1095.8 607.8Q1131 630 1181.5 630ZM1672 730 1502 187H1645L1807.5 730ZM1713 730V616H1859.5V730ZM1768 730 1908 187H2042L1895 730ZM2443.5 730V569H2420.5V390Q2420.5 343.5 2397.5 320.2Q2374.5 297 2327 297Q2302 297 2267 298Q2232 299 2196.5 300.5Q2161 302 2133 304V186Q2156 184 2184.8 182.2Q2213.5 180.5 2244.2 179.8Q2275 179 2302 179Q2385.5 179 2441.2 201.2Q2497 223.5 2525.2 270.5Q2553.5 317.5 2553.5 393.5V730ZM2268.5 744Q2209.5 744 2165.2 723.2Q2121 702.5 2096.5 663.2Q2072 624 2072 569Q2072 509.5 2101.2 471.2Q2130.5 433 2184 414.2Q2237.5 395.5 2309.5 395.5H2435.5V478.5H2307.5Q2260 478.5 2234.5 501.8Q2209 525 2209 562.5Q2209 599.5 2234.5 622.2Q2260 645 2307.5 645Q2336.5 645 2361.2 634.5Q2386 624 2402.2 598.8Q2418.5 573.5 2420.5 529L2454.5 568Q2449.5 625 2427 664Q2404.5 703 2365 723.5Q2325.5 744 2268.5 744ZM2811 506V383H2952.5Q2995.5 383 3025 366Q3054.5 349 3070.2 319Q3086 289 3086 250.5Q3086 211 3070.2 181Q3054.5 151 3025 134.5Q2995.5 118 2952.5 118H2811V-5H2941Q3033 -5 3097.5 25Q3162 55 3196 110.5Q3230 166 3230 242.5V258.5Q3230 334 3196 389.8Q3162 445.5 3097.5 475.8Q3033 506 2941 506ZM2689 730V-5H2831V730ZM3311 730V0H3450V426H3426Q3426 344.5 3446.8 287.2Q3467.5 230 3509.2 200Q3551 170 3614.5 170H3620.5Q3713.5 170 3761.8 234.2Q3810 298.5 3810 420.5V730H3671V407Q3671 355.5 3641.2 325.2Q3611.5 295 3563.5 295Q3512.5 295 3481.2 328.5Q3450 362 3450 416.5V730ZM4194.5 749Q4123 749 4068 726Q4013 703 3975 663.8Q3937 624.5 3917.5 574.5Q3898 524.5 3898 470V449Q3898 393.5 3918.2 342.8Q3938.5 292 3977 252.8Q4015.5 213.5 4070.5 190.8Q4125.5 168 4194.5 168Q4264 168 4318.8 190.8Q4373.5 213.5 4412 252.8Q4450.5 292 4470.8 342.8Q4491 393.5 4491 449V470Q4491 524.5 4471.5 574.5Q4452 624.5 4414 663.8Q4376 703 4321 726Q4266 749 4194.5 749ZM4194.5 630Q4245.5 630 4280.5 607.8Q4315.5 585.5 4333.8 546.8Q4352 508 4352 459.5Q4352 409.5 4333.2 370.8Q4314.5 332 4279.2 309.5Q4244 287 4194.5 287Q4145.5 287 4110 309.5Q4074.5 332 4055.8 370.8Q4037 409.5 4037 459.5Q4037 508 4055.2 546.8Q4073.5 585.5 4108.8 607.8Q4144 630 4194.5 630ZM4588 730V187H4698V420H4688Q4688 337.5 4709.8 282Q4731.5 226.5 4775.2 198.2Q4819 170 4883.5 170H4889.5Q4987 170 5037 232.8Q5087 295.5 5087 419.5V730H4948V407Q4948 357 4919.2 326Q4890.5 295 4840.5 295Q4789.5 295 4758.2 326.8Q4727 358.5 4727 411V730ZM5454 749Q5384 749 5331.5 725Q5279 701 5244.5 660.8Q5210 620.5 5192.5 570.5Q5175 520.5 5175 468V449Q5175 395 5192.5 344.8Q5210 294.5 5244.2 254.8Q5278.5 215 5329.8 191.5Q5381 168 5448 168Q5536 168 5595.2 206.8Q5654.5 245.5 5684.8 307.8Q5715 370 5715 442V492.5H5234V407.5H5627.5L5585 449Q5585 397 5569.8 360Q5554.5 323 5524.2 303Q5494 283 5448 283Q5401.5 283 5369.5 304.2Q5337.5 325.5 5321.2 364.8Q5305 404 5305 459Q5305 510.5 5320.8 550Q5336.5 589.5 5369.5 611.8Q5402.5 634 5454 634Q5504.5 634 5536.5 613.5Q5568.5 593 5577.5 563.5H5705.5Q5694 619 5659.8 661Q5625.5 703 5573.2 726Q5521 749 5454 749Z";
+
+type MarkVariant = "gradient" | "mono";
+
+type MarkArtProps = { gradientId: string; variant: MarkVariant };
+
+function MarkArt({ gradientId, variant }: MarkArtProps) {
+  const stroke = variant === "mono" ? "currentColor" : `url(#${gradientId})`;
+  return (
+    <>
+      {variant === "gradient" ? (
+        <defs>
+          <linearGradient
+            id={gradientId}
+            x1="8"
+            y1="56"
+            x2="56"
+            y2="8"
+            gradientUnits="userSpaceOnUse"
+          >
+            <stop offset="0" stopColor="#7C3AED" />
+            <stop offset="0.55" stopColor="#A78BFA" />
+            <stop offset="1" stopColor="#E4DEFF" />
+          </linearGradient>
+        </defs>
+      ) : null}
+      <g
+        fill="none"
+        stroke={stroke}
+        strokeWidth={9}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d={MARK_A} />
+        <path d={MARK_B} />
+      </g>
+      <circle
+        cx="32"
+        cy="32"
+        r="4.5"
+        fill={variant === "mono" ? "currentColor" : "#7DE3F4"}
+      />
+    </>
+  );
+}
+
+type BaseSvgProps = Omit<SVGProps<SVGSVGElement>, "children" | "viewBox">;
+
+export type LogoMarkProps = BaseSvgProps & {
+  /** Rendered size in px (square). Default 32. */
+  size?: number;
+  /** "gradient" (default, for dark surfaces) or "mono" (uses currentColor). */
+  variant?: MarkVariant;
+  /** Accessible label. Pass `null` to render decoratively (aria-hidden). */
+  title?: string | null;
+};
+
+export function LogoMark({
+  size = 32,
+  variant = "gradient",
+  title = "NovaPhone",
+  className,
+  ...props
+}: LogoMarkProps) {
+  const id = useId();
+  const decorative = title === null;
+  return (
+    <svg
+      viewBox="0 0 64 64"
+      width={size}
+      height={size}
+      role={decorative ? undefined : "img"}
+      aria-hidden={decorative ? true : undefined}
+      aria-label={decorative ? undefined : title}
+      className={clsx("shrink-0", className)}
+      {...props}
+    >
+      <MarkArt gradientId={`np-mark-${id}`} variant={variant} />
+    </svg>
+  );
+}
+
+// Lockup geometry (font units). Mark visual height = 1.38 × cap height,
+// optically centred on the cap height; gap = 0.4 × cap height.
+const LOCKUP_W = 7053;
+const LOCKUP_H = 1012;
+
+export type LogoProps = BaseSvgProps & {
+  /** Rendered height in px; width follows the aspect ratio. Default 28. */
+  size?: number;
+  /** Mark style. The wordmark always uses currentColor. */
+  variant?: MarkVariant;
+  /** Accessible label. Pass `null` when a parent link already has a label. */
+  title?: string | null;
+};
+
+export function Logo({
+  size = 28,
+  variant = "gradient",
+  title = "NovaPhone",
+  className,
+  ...props
+}: LogoProps) {
+  const id = useId();
+  const decorative = title === null;
+  return (
+    <svg
+      viewBox={`0 -141 ${LOCKUP_W} ${LOCKUP_H}`}
+      height={size}
+      width={Math.round((size * LOCKUP_W) / LOCKUP_H)}
+      role={decorative ? undefined : "img"}
+      aria-hidden={decorative ? true : undefined}
+      aria-label={decorative ? undefined : title}
+      className={clsx("shrink-0", className)}
+      {...props}
+    >
+      <g transform="translate(-182.75 -323) scale(21.5)">
+        <MarkArt gradientId={`np-logo-${id}`} variant={variant} />
+      </g>
+      <path transform="translate(1300.5 0)" fill="currentColor" d={WORDMARK} />
+    </svg>
+  );
+}
