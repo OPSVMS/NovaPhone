@@ -1,0 +1,1 @@
+ALTER TABLE "call_logs" ADD COLUMN "dtmf_sent" text;

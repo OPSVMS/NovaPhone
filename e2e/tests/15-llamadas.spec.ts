@@ -26,6 +26,12 @@ test("llamada de verificación: se contesta, se transcribe, se detecta el códig
   expect((await (await hook(request, evt("call.answered", base))).json()).result).toBe("transcribing");
   expect((await commands()).some((c) => c.ccid === ccid && c.action === "transcription_start")).toBe(true);
 
+  // Menú de WhatsApp: el sistema marca la tecla solo.
+  const menu = await hook(request, evt("call.transcription", { ...base, transcription_data: { transcript: "Para recibir tu código de verificación de WhatsApp, pulsa 4,", is_final: true } }));
+  expect((await menu.json()).result).toBe("dtmf");
+  expect((await commands()).some((c) => c.ccid === ccid && c.action === "send_dtmf" && c.body.digits === "4")).toBe(true);
+  // Se repite el menú: no vuelve a marcar.
+  expect((await (await hook(request, evt("call.transcription", { ...base, transcription_data: { transcript: "pulsa 4", is_final: true } }))).json()).result).not.toBe("dtmf");
   await hook(request, evt("call.transcription", { ...base, transcription_data: { transcript: "Tu código de WhatsApp es", is_final: true } }));
   const r = await hook(request, evt("call.transcription", { ...base, transcription_data: { transcript: "cuatro cuatro dos uno nueve cero", is_final: true } }));
   expect((await r.json()).result).toBe("code");

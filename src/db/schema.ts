@@ -181,6 +181,8 @@ export const callLogs = pgTable("call_logs", {
   code: text("code"),
   notifiedAt: timestamp("notified_at", { withTimezone: true }),
   answeredAt: timestamp("answered_at", { withTimezone: true }),
+  /** Teclas enviadas al menú de voz (p. ej. "pulsa 4" de WhatsApp). */
+  dtmfSent: text("dtmf_sent"),
   externalId: text("external_id"),
   startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("calls_number_idx").on(t.numberId, t.startedAt), uniqueIndex("calls_external_idx").on(t.externalId)]);

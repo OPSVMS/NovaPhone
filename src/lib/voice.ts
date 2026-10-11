@@ -2,7 +2,7 @@ import "server-only";
 import { and, eq, sql as dsql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { normalizeE164 } from "./numbers";
-import { extractSpokenCode } from "./spoken-code";
+import { extractMenuKey, extractSpokenCode } from "./spoken-code";
 import { sendSmsReceived } from "./email";
 
 /**
@@ -132,7 +132,31 @@ export async function handleTelnyxEvent(evt: TelnyxEvent) {
       .returning();
     if (!row) return "unknown-call";
     const code = extractSpokenCode(row.transcript ?? "");
-    if (code && !row.notifiedAt) {
+    // Menú de voz ("pulsa 4", "press 1", "aperte #"): marcamos la tecla y seguimos escuchando.
+    // Se permiten varias teclas por llamada (menús de varios pasos), sin repetir la misma en menos de 8 s.
+    if (!code) {
+      const key = extractMenuKey(t.transcript);
+      if (key) {
+        const sent = (row.dtmfSent ?? "").split(",").filter(Boolean).map((x) => {
+          const [k, at] = x.split("@");
+          return { k, at: Number(at) };
+        });
+        const last = sent.at(-1);
+        const now = Date.now();
+        if (sent.length < 4 && !(last && last.k === key && now - last.at < 8_000)) {
+          const next = [...sent.map((x) => `${x.k}@${x.at}`), `${key}@${now}`].join(",");
+          const [claimed] = await db
+            .update(schema.callLogs)
+            .set({ dtmfSent: next })
+            .where(and(eq(schema.callLogs.id, row.id), row.dtmfSent ? eq(schema.callLogs.dtmfSent, row.dtmfSent) : dsql`${schema.callLogs.dtmfSent} is null`))
+            .returning();
+          if (claimed) await command(ccid, "send_dtmf", { digits: key, duration_millis: 250 }).catch((e) => console.error("dtmf", e));
+          return "dtmf";
+        }
+      }
+    }
+    // Avisamos con un código completo de 6+ dígitos (o el que haya al colgar), para no cortar uno a medias.
+    if (code && code.length >= 6 && !row.notifiedAt) {
       const [claimed] = await db
         .update(schema.callLogs)
         .set({ code, notifiedAt: new Date() })
@@ -158,6 +182,24 @@ export async function handleTelnyxEvent(evt: TelnyxEvent) {
   if (type === "call.hangup") {
     const row = await db.query.callLogs.findFirst({ where: eq(schema.callLogs.externalId, externalId) });
     if (!row) return "unknown-call";
+    // Código corto (4–5 dígitos) que no se avisó durante la llamada: se avisa al terminar.
+    const finalCode = row.code ?? (row.transcript ? extractSpokenCode(row.transcript) : null);
+    if (finalCode && !row.notifiedAt && row.userId) {
+      const [claimed] = await db
+        .update(schema.callLogs)
+        .set({ notifiedAt: new Date(), code: finalCode })
+        .where(and(eq(schema.callLogs.id, row.id), dsql`${schema.callLogs.notifiedAt} is null`))
+        .returning();
+      const user = claimed ? await db.query.users.findFirst({ where: eq(schema.users.id, row.userId) }) : null;
+      if (user) {
+        await sendSmsReceived(user.email, {
+          number: row.toNumber,
+          from: `Llamada de ${row.fromNumber}`,
+          body: `Código dictado por llamada: ${finalCode}. Transcripción: ${row.transcript}`,
+          url: `${process.env.APP_URL ?? ""}/app/numero`,
+        });
+      }
+    }
     const start = row.answeredAt ?? (p.start_time ? new Date(p.start_time) : null);
     const end = p.end_time ? new Date(p.end_time) : new Date();
     await db
