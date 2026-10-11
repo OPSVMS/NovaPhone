@@ -11,6 +11,10 @@ export const users = pgTable("users", {
   balanceCents: integer("balance_cents").notNull().default(0),
   /** CLABE personal asignada por el core bancario (depósitos SPEI sin referencia). */
   clabe: text("clabe"),
+  /** Cuenta suspendida por un admin: no puede entrar ni comprar. */
+  disabledAt: timestamp("disabled_at", { withTimezone: true }),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+  adminNote: text("admin_note"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex("users_email_idx").on(t.email), uniqueIndex("users_clabe_idx").on(t.clabe)]);
 
@@ -177,6 +181,17 @@ export const callLogs = pgTable("call_logs", {
   startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("calls_number_idx").on(t.numberId, t.startedAt), uniqueIndex("calls_external_idx").on(t.externalId)]);
 
+/** Bitácora de acciones de administradores. */
+export const adminAudit = pgTable("admin_audit", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  adminId: uuid("admin_id").notNull().references(() => users.id),
+  action: text("action").notNull(),
+  targetType: text("target_type").notNull(),
+  targetId: text("target_id"),
+  details: jsonb("details").$type<Record<string, unknown>>(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("admin_audit_target_idx").on(t.targetType, t.targetId), index("admin_audit_created_idx").on(t.createdAt)]);
+
 /** Eventos de webhooks ya procesados (deduplicación por notifyId). */
 export const webhookEvents = pgTable("webhook_events", {
   id: text("id").primaryKey(),
@@ -199,3 +214,4 @@ export type Topup = typeof topups.$inferSelect;
 export type PhoneNumber = typeof phoneNumbers.$inferSelect;
 export type SmsMessage = typeof smsMessages.$inferSelect;
 export type CallLog = typeof callLogs.$inferSelect;
+export type AdminAudit = typeof adminAudit.$inferSelect;

@@ -36,6 +36,13 @@
       "when": 1791450217645,
       "tag": "0004_call_logs",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791752444348,
+      "tag": "0005_admin_panel",
+      "breakpoints": true
     }
   ]
 }

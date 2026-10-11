@@ -24,8 +24,6 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
               <LogoMark size={28} title={null} className="sm:hidden" />
             </Link>
             <Badge variant="primary">Admin</Badge>
-            <div className="ml-1 hidden h-6 w-px bg-border sm:block" aria-hidden />
-            <AdminNav />
           </div>
           <div className="flex items-center gap-2">
             <Link
@@ -35,6 +33,11 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
               <ArrowLeft aria-hidden className="size-4" /> Ir a la app
             </Link>
             <UserMenu name={user.name} email={user.email} isAdmin />
+          </div>
+        </div>
+        <div className="border-t border-border">
+          <div className="mx-auto w-full max-w-6xl px-2 sm:px-4 lg:px-6">
+            <AdminNav />
           </div>
         </div>
       </header>

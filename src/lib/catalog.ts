@@ -36,7 +36,10 @@ export async function syncCatalog() {
         featured: FEATURED.has(p.slug),
         updatedAt: new Date(),
       };
-      await db.insert(schema.plans).values(row).onConflictDoUpdate({ target: schema.plans.id, set: row });
+      // En actualizaciones no se toca `active`: respeta los planes que un admin ocultó.
+      const { active: _active, ...update } = row;
+      void _active;
+      await db.insert(schema.plans).values(row).onConflictDoUpdate({ target: schema.plans.id, set: update });
       seen.push(p.slug);
     }
   }

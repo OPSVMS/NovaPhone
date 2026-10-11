@@ -51,7 +51,11 @@ export const getUser = cache(async (): Promise<SessionUser | null> => {
     .where(and(eq(schema.sessions.id, hash(token)), gt(schema.sessions.expiresAt, new Date())))
     .limit(1);
   const u = rows[0]?.user;
-  if (!u) return null;
+  if (!u || u.disabledAt) return null;
+  // Última actividad (se actualiza como máximo cada 5 minutos).
+  if (!u.lastSeenAt || Date.now() - u.lastSeenAt.getTime() > 5 * 60_000) {
+    await db.update(schema.users).set({ lastSeenAt: new Date() }).where(eq(schema.users.id, u.id)).catch(() => null);
+  }
   return { id: u.id, email: u.email, name: u.name, role: u.role, verified: !!u.emailVerifiedAt, balanceCents: u.balanceCents };
 });
 

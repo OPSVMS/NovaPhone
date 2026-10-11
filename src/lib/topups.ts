@@ -36,23 +36,26 @@ export async function getTopupOptions(order: Order): Promise<TopupOption[]> {
 export type TopupResult = { ok: true } | { ok: false; error: string; code?: "funds" | "unavailable" | "provider" };
 
 /** Cobra del saldo y aplica la recarga en el proveedor. Reembolsa si el proveedor falla. */
-export async function applyTopup(order: Order, planId: string, opts: { auto?: boolean } = {}): Promise<TopupResult> {
+export async function applyTopup(order: Order, planId: string, opts: { auto?: boolean; free?: boolean } = {}): Promise<TopupResult> {
   const option = (await getTopupOptions(order)).find((o) => o.planId === planId);
   if (!option) return { ok: false, error: "Esa recarga no está disponible para esta eSIM.", code: "unavailable" };
   const priceCents = option.priceMxn * 100;
 
   const [topup] = await db
     .insert(schema.topups)
-    .values({ orderId: order.id, userId: order.userId, planId, planName: option.name, priceCents, costUsd: option.costUsd, auto: !!opts.auto })
+    .values({ orderId: order.id, userId: order.userId, planId, planName: option.name, priceCents: opts.free ? 0 : priceCents, costUsd: option.costUsd, auto: !!opts.auto })
     .returning();
 
-  const balance = await adjustBalance({
-    userId: order.userId,
-    amountCents: -priceCents,
-    kind: "purchase",
-    description: `${opts.auto ? "Auto-recarga" : "Recarga"} ${option.name}`,
-    refId: topup.id,
-  });
+  // Cortesía del admin: se aplica sin cobrar al cliente (se registra en el movimiento con $0).
+  const balance = opts.free
+    ? await adjustBalance({ userId: order.userId, amountCents: 0, kind: "adjustment", description: `Recarga de cortesía ${option.name}`, refId: topup.id })
+    : await adjustBalance({
+        userId: order.userId,
+        amountCents: -priceCents,
+        kind: "purchase",
+        description: `${opts.auto ? "Auto-recarga" : "Recarga"} ${option.name}`,
+        refId: topup.id,
+      });
   if (balance === null) {
     await db.delete(schema.topups).where(eq(schema.topups.id, topup.id));
     return { ok: false, error: "Saldo insuficiente para la recarga.", code: "funds" };
@@ -93,7 +96,7 @@ export async function applyTopup(order: Order, planId: string, opts: { auto?: bo
       .set({ status: "refunded", error: msg })
       .where(and(eq(schema.topups.id, topup.id), eq(schema.topups.status, "pending")))
       .returning();
-    if (refunded) {
+    if (refunded && !opts.free) {
       await adjustBalance({ userId: order.userId, amountCents: priceCents, kind: "refund", description: `Reembolso recarga ${option.name}`, refId: topup.id });
     }
     return { ok: false, error: "No pudimos aplicar la recarga. Te devolvimos el saldo.", code: "provider" };

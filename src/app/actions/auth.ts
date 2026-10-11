@@ -74,6 +74,7 @@ export async function login(_: FormState, form: FormData): Promise<FormState> {
   const { email, password, next } = parsed.data;
   const user = await db.query.users.findFirst({ where: eq(schema.users.email, email) });
   if (!user || !(await bcrypt.compare(password, user.passwordHash))) return { error: "Correo o contraseña incorrectos." };
+  if (user.disabledAt) return { error: "Tu cuenta está suspendida. Escríbenos a hola@novaphone.lat." };
   await createSession(user.id);
   redirect(safeNext(next) ?? "/app");
 }

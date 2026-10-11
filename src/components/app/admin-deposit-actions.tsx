@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Check, X } from "lucide-react";
 import { adminApproveDeposit, adminCancelDeposit } from "@/app/actions/wallet";
 import { Button } from "@/components/ui/button";
@@ -22,7 +23,12 @@ export function AdminDepositActions({
   method: string;
 }) {
   const [open, setOpen] = useState<"approve" | "cancel" | null>(null);
+  const router = useRouter();
   const close = () => setOpen(null);
+  const done = () => {
+    close();
+    router.refresh();
+  };
 
   const details = (
     <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 rounded-2xl border border-border bg-surface-2/60 p-4 text-sm">
@@ -50,7 +56,7 @@ export function AdminDepositActions({
         className="contents"
         action={async (fd) => {
           await adminApproveDeposit(fd);
-          close();
+          done();
         }}
       >
         <input type="hidden" name="depositId" value={depositId} />
@@ -77,7 +83,7 @@ export function AdminDepositActions({
         className="contents"
         action={async (fd) => {
           await adminCancelDeposit(fd);
-          close();
+          done();
         }}
       >
         <input type="hidden" name="depositId" value={depositId} />

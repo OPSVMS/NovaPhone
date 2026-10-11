@@ -1,96 +1,239 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { CardSim, CircleDollarSign, Clock, Server, TrendingUp, Users } from "lucide-react";
+import Link from "next/link";
+import {
+  ArrowRight,
+  CardSim,
+  CircleDollarSign,
+  Clock,
+  Landmark,
+  MessageSquareText,
+  PiggyBank,
+  TrendingUp,
+  UserCheck,
+  UserPlus,
+  Users,
+  Wallet,
+} from "lucide-react";
 import { requireAdmin } from "@/lib/session";
-import { getBalanceUsd } from "@/lib/esimaccess";
-import { getAdminStats, getPendingDeposits, getRecentOrders, getRecentUsers } from "@/lib/queries";
+import { getActivity, getOverview } from "@/lib/admin";
+import { getAdminStats, getPendingDeposits } from "@/lib/queries";
 import { formatMxn } from "@/lib/pricing";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { Stat } from "@/components/ui/stat";
-import { Stagger, StaggerItem } from "@/components/motion/stagger";
-import { OrderStatusBadge, methodLabel } from "@/components/app/status-badges";
+import { methodLabel } from "@/components/app/status-badges";
 import { AdminDepositActions } from "@/components/app/admin-deposit-actions";
+import { ActivityFeed } from "@/components/app/admin-activity";
+import { AdminHeader, Kpi, SectionTitle, money, td, th } from "@/components/app/admin-ui";
 import { formatDateTime } from "@/components/app/format";
+import type { Deposit } from "@/db/schema";
 
-export const metadata: Metadata = { title: "Admin" };
+export const metadata: Metadata = { title: "Resumen · Admin" };
 
 const usd = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+const n = (v: number) => v.toLocaleString("es-MX");
 
-async function providerBalance() {
-  try {
-    return await getBalanceUsd();
-  } catch {
-    return null;
-  }
-}
-
-function SectionTitle({ children, aside }: { children: ReactNode; aside?: ReactNode }) {
+function KpiGroup({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-3">
-      <h2 className="text-lg font-semibold text-fg">{children}</h2>
-      {aside}
-    </div>
+    <section aria-label={title} className="flex flex-col gap-2.5">
+      <h2 className="text-[12px] font-medium uppercase tracking-wider text-subtle">{title}</h2>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{children}</div>
+    </section>
   );
 }
 
-const th = "px-5 py-3 text-left text-[12px] font-medium uppercase tracking-wider text-subtle";
-const td = "px-5 py-3.5 text-sm";
+function ProviderRow({ name, status, detail }: { name: string; status: ReactNode; detail?: ReactNode }) {
+  return (
+    <li className="flex items-center justify-between gap-3 px-4 py-3 sm:px-5">
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <span className="text-sm font-medium text-fg">{name}</span>
+        {detail ? <span className="truncate text-[13px] text-subtle">{detail}</span> : null}
+      </div>
+      <div className="shrink-0">{status}</div>
+    </li>
+  );
+}
+
+const enabledBadge = (on: boolean) =>
+  on ? (
+    <Badge variant="success" dot>
+      Activo
+    </Badge>
+  ) : (
+    <Badge variant="neutral">No configurado</Badge>
+  );
 
 export default async function AdminPage() {
   await requireAdmin();
-  const [stats, balanceUsd, pending, orders, users] = await Promise.all([
-    getAdminStats(),
-    providerBalance(),
-    getPendingDeposits(),
-    getRecentOrders(10),
-    getRecentUsers(10),
-  ]);
+  const [o, stats, pending, activity] = await Promise.all([getOverview(), getAdminStats(), getPendingDeposits(), getActivity(10)]);
+  const now = new Date().getTime();
 
-  const tiles = [
-    {
-      label: "Saldo proveedor",
-      icon: <Server aria-hidden />,
-      value: balanceUsd === null ? "—" : usd(balanceUsd),
-      hint: balanceUsd === null ? "No disponible" : balanceUsd < 50 ? "Recarga pronto" : "eSIM Access",
-      warn: balanceUsd !== null && balanceUsd < 50,
-    },
-    { label: "Usuarios", icon: <Users aria-hidden />, value: stats.users.toLocaleString("es-MX"), hint: "Registrados" },
-    { label: "eSIMs vendidas", icon: <CardSim aria-hidden />, value: stats.esimsSold.toLocaleString("es-MX"), hint: "Listas o en proceso" },
-    { label: "Ingresos", icon: <CircleDollarSign aria-hidden />, value: formatMxn(stats.revenueCents), hint: "MXN cobrados en eSIMs" },
-    {
-      label: "Margen estimado",
-      icon: <TrendingUp aria-hidden />,
-      value: formatMxn(stats.marginCents),
-      hint: `${Math.round(stats.marginPct * 100)}% · TC ${stats.fx.toFixed(2)}`,
-    },
-  ];
+  const esa = o.providers.esimAccessUsd;
+  const cn = o.providers.cloudnumbering;
+  const esaLow = esa !== null && esa < 50;
+  const cnLow = cn !== null && cn.balance < 20;
+  const depTotal = o.deposits30.reduce((a, d) => a + d.cents, 0);
+  const marginPct = o.sales.all > 0 ? Math.round((o.estimatedMarginCents / o.sales.all) * 100) : 0;
 
   return (
     <div className="flex flex-col gap-10 pb-12">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold text-fg sm:text-3xl">Panel</h1>
-        <p className="text-[15px] text-muted">Operación de NovaPhone en tiempo real.</p>
+      <AdminHeader title="Resumen" description="Operación de NovaPhone en tiempo real." />
+
+      {esaLow || cnLow || o.esims.provisioning > 0 ? (
+        <div className="flex flex-wrap gap-2" role="status">
+          {esaLow ? <Badge variant="warning" dot="pulse">Saldo eSIM Access bajo: {usd(esa!)}</Badge> : null}
+          {cnLow ? (
+            <Badge variant="warning" dot="pulse">
+              Saldo cloudnumbering bajo: {cn!.balance.toFixed(2)} {cn!.currency}
+            </Badge>
+          ) : null}
+          {o.esims.provisioning > 0 ? (
+            <Link href="/admin/esims?status=provisioning">
+              <Badge variant="warning" dot="pulse">
+                {o.esims.provisioning} eSIM(s) generándose
+              </Badge>
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="flex flex-col gap-6">
+        <KpiGroup title="Usuarios">
+          <Kpi label="Usuarios" icon={<Users aria-hidden />} value={n(o.users.total)} hint={`${n(o.users.disabled)} suspendidos`} />
+          <Kpi label="Nuevos 7 días" icon={<UserPlus aria-hidden />} value={n(o.users.new7)} hint="Registros de la semana" />
+          <Kpi label="Activos hoy" icon={<UserCheck aria-hidden />} value={n(o.users.active1)} hint={`${n(o.users.active7)} en 7 días`} />
+          <Kpi label="Con CLABE" icon={<Landmark aria-hidden />} value={n(o.users.with_clabe)} hint="Cuenta SPEI personal" />
+        </KpiGroup>
+
+        <KpiGroup title="eSIMs">
+          <Kpi label="eSIMs activas" icon={<CardSim aria-hidden />} value={n(o.esims.active)} hint={`${n(o.esims.total)} vendidas en total`} />
+          <Kpi label="Instaladas" icon={<CardSim aria-hidden />} value={n(o.esims.installed)} hint="Perfil encendido en el teléfono" />
+          <Kpi label="Vendidas 30 días" icon={<TrendingUp aria-hidden />} value={n(o.esims.sold30)} hint="Órdenes del mes" />
+          <Kpi
+            label="Generando"
+            icon={<Clock aria-hidden />}
+            value={n(o.esims.provisioning)}
+            hint={o.esims.provisioning ? "Revisa si alguna está atascada" : "Sin pendientes"}
+            tone={o.esims.provisioning ? "warning" : undefined}
+          />
+        </KpiGroup>
+
+        <KpiGroup title="Ventas">
+          <Kpi label="Ventas hoy" icon={<CircleDollarSign aria-hidden />} value={formatMxn(o.sales.today)} hint="Últimas 24 h" />
+          <Kpi label="Ventas 7 días" icon={<CircleDollarSign aria-hidden />} value={formatMxn(o.sales.week)} />
+          <Kpi label="Ventas 30 días" icon={<CircleDollarSign aria-hidden />} value={formatMxn(o.sales.month)} />
+          <Kpi
+            label="Ventas totales"
+            icon={<CircleDollarSign aria-hidden />}
+            value={formatMxn(o.sales.all)}
+            hint={o.sales.refunds ? `${formatMxn(o.sales.refunds)} reembolsados` : "Sin reembolsos"}
+          />
+        </KpiGroup>
+
+        <KpiGroup title="Finanzas">
+          <Kpi
+            label="Margen estimado eSIMs"
+            icon={<TrendingUp aria-hidden />}
+            value={formatMxn(o.estimatedMarginCents)}
+            hint={`${marginPct}% · TC ${o.fx.toFixed(2)}`}
+            tone={o.estimatedMarginCents < 0 ? "danger" : undefined}
+          />
+          <Kpi label="Saldo de usuarios" icon={<Wallet aria-hidden />} value={formatMxn(o.usersBalanceCents)} hint="Pasivo: saldo por consumir" />
+          <Kpi label="Depositado 30 días" icon={<PiggyBank aria-hidden />} value={formatMxn(depTotal)} hint="Depósitos acreditados" />
+          <Kpi
+            label="Números asignados"
+            icon={<MessageSquareText aria-hidden />}
+            value={n(o.numbers.assigned)}
+            hint={`${n(o.numbers.available)} disponibles${o.numbers.grace ? ` · ${o.numbers.grace} en gracia` : ""}`}
+            tone={o.numbers.grace ? "warning" : undefined}
+          />
+        </KpiGroup>
       </div>
 
-      <Stagger immediate className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        {tiles.map((t, i) => (
-          <StaggerItem key={t.label} className={i === 0 ? "col-span-2 lg:col-span-1" : undefined}>
-            <Card className="h-full p-4 sm:p-5">
-              <Stat
-                label={t.label}
-                icon={t.icon}
-                value={t.value}
-                hint={t.warn ? <span className="text-warning">{t.hint}</span> : t.hint}
+      <div className="grid gap-10 lg:grid-cols-2 lg:gap-6">
+        <section aria-labelledby="providers" className="flex min-w-0 flex-col gap-3">
+          <SectionTitle id="providers">Proveedores</SectionTitle>
+          <Card className="overflow-hidden">
+            <ul className="divide-y divide-border">
+              <ProviderRow
+                name="eSIM Access"
+                detail={esa === null ? "No se pudo leer el saldo" : esaLow ? "Recarga pronto (mín. recomendado $50 USD)" : "Saldo del proveedor de eSIMs"}
+                status={
+                  esa === null ? (
+                    <Badge variant="danger">Sin datos</Badge>
+                  ) : (
+                    <Badge variant={esaLow ? "warning" : "success"} dot={esaLow ? "pulse" : true}>
+                      <span className="tabular-nums">{usd(esa)}</span>
+                    </Badge>
+                  )
+                }
               />
-            </Card>
-          </StaggerItem>
-        ))}
-      </Stagger>
+              <ProviderRow
+                name="cloudnumbering"
+                detail={cn === null ? "No configurado o sin respuesta" : cnLow ? "Recarga pronto (mín. recomendado £20)" : "Saldo para números virtuales"}
+                status={
+                  cn === null ? (
+                    <Badge variant="neutral">Sin datos</Badge>
+                  ) : (
+                    <Badge variant={cnLow ? "warning" : "success"} dot={cnLow ? "pulse" : true}>
+                      <span className="tabular-nums">
+                        {cn.balance.toFixed(2)} {cn.currency}
+                      </span>
+                    </Badge>
+                  )
+                }
+              />
+              <ProviderRow name="NOVACORE" detail="SPEI y CLABEs personales" status={enabledBadge(o.providers.novacore)} />
+              <ProviderRow name="Openpay" detail="Pagos con tarjeta" status={enabledBadge(o.providers.openpay)} />
+              <ProviderRow name="Correo" detail="Envío de correos transaccionales" status={enabledBadge(o.providers.email)} />
+              <ProviderRow
+                name="Tipo de cambio"
+                detail="USD → MXN"
+                status={<span className="font-display text-sm font-semibold text-fg tabular-nums">{o.fx.toFixed(4)}</span>}
+              />
+            </ul>
+          </Card>
+        </section>
+
+        <section aria-labelledby="deposits30" className="flex min-w-0 flex-col gap-3">
+          <SectionTitle id="deposits30" aside={<span className={`${money} text-sm`}>{formatMxn(depTotal)}</span>}>
+            Depósitos 30 días por método
+          </SectionTitle>
+          <Card className="p-4 sm:p-5">
+            {o.deposits30.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted">Sin depósitos acreditados en 30 días.</p>
+            ) : (
+              <ul className="flex flex-col gap-4">
+                {[...o.deposits30]
+                  .sort((a, b) => b.cents - a.cents)
+                  .map((d) => {
+                    const pct = depTotal ? Math.round((d.cents / depTotal) * 100) : 0;
+                    return (
+                      <li key={d.method} className="flex flex-col gap-1.5">
+                        <div className="flex items-baseline justify-between gap-3 text-sm">
+                          <Link href={`/admin/depositos?method=${d.method}&status=completed`} className="font-medium text-fg hover:text-lavender-soft">
+                            {methodLabel(d.method as Deposit["method"])}
+                          </Link>
+                          <span className="text-muted tabular-nums">
+                            <span className="font-display font-semibold text-fg">{formatMxn(d.cents)}</span> · {n(d.n)} dep. · {pct}%
+                          </span>
+                        </div>
+                        <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.06]" aria-hidden>
+                          <div className="h-full rounded-full bg-linear-to-r from-primary to-lavender" style={{ width: `${Math.max(pct, 2)}%` }} />
+                        </div>
+                      </li>
+                    );
+                  })}
+              </ul>
+            )}
+          </Card>
+        </section>
+      </div>
 
       {/* Pending deposits */}
       <section aria-labelledby="pending" className="flex flex-col gap-3">
         <SectionTitle
+          id="pending"
           aside={
             pending.length > 0 ? (
               <Badge variant="warning" dot="pulse">
@@ -99,7 +242,7 @@ export default async function AdminPage() {
             ) : null
           }
         >
-          <span id="pending">Depósitos pendientes</span>
+          Depósitos pendientes
         </SectionTitle>
         {pending.length === 0 ? (
           <p className="rounded-card border border-dashed border-border-strong px-5 py-8 text-center text-sm text-muted">
@@ -108,7 +251,6 @@ export default async function AdminPage() {
           </p>
         ) : (
           <Card className="overflow-hidden">
-            {/* Desktop table */}
             <div className="hidden overflow-x-auto md:block">
               <table className="w-full">
                 <thead className="border-b border-border">
@@ -133,7 +275,7 @@ export default async function AdminPage() {
                       </td>
                       <td className={`${td} font-mono text-fg`}>{d.reference}</td>
                       <td className={`${td} text-right`}>
-                        <p className="font-display font-semibold text-fg tabular-nums">{formatMxn(d.amountCents)}</p>
+                        <p className={money}>{formatMxn(d.amountCents)}</p>
                         {d.expectedUsdt ? <p className="font-mono text-[12px] text-subtle">{d.expectedUsdt} USDT</p> : null}
                       </td>
                       <td className={`${td} whitespace-nowrap text-muted`}>{formatDateTime(d.createdAt)}</td>
@@ -153,7 +295,6 @@ export default async function AdminPage() {
                 </tbody>
               </table>
             </div>
-            {/* Mobile cards */}
             <ul className="divide-y divide-border md:hidden">
               {pending.map((d) => (
                 <li key={d.id} className="flex flex-col gap-3 p-4">
@@ -163,7 +304,7 @@ export default async function AdminPage() {
                       <p className="truncate text-[13px] text-subtle">{d.userEmail}</p>
                     </div>
                     <div className="text-right">
-                      <p className="font-display font-semibold text-fg tabular-nums">{formatMxn(d.amountCents)}</p>
+                      <p className={money}>{formatMxn(d.amountCents)}</p>
                       {d.expectedUsdt ? <p className="font-mono text-[12px] text-subtle">{d.expectedUsdt} USDT</p> : null}
                     </div>
                   </div>
@@ -187,77 +328,21 @@ export default async function AdminPage() {
         )}
       </section>
 
-      <div className="grid gap-10 lg:grid-cols-2 lg:gap-6">
-        {/* Recent orders */}
-        <section aria-labelledby="orders" className="flex min-w-0 flex-col gap-3">
-          <SectionTitle>
-            <span id="orders">Órdenes recientes</span>
-          </SectionTitle>
-          <Card className="overflow-hidden">
-            {orders.length === 0 ? (
-              <p className="px-5 py-8 text-center text-sm text-muted">Sin órdenes todavía.</p>
-            ) : (
-              <ul className="divide-y divide-border">
-                {orders.map((o) => {
-                  const marginCents = o.priceCents - Math.round(o.costUsd * stats.fx * 100);
-                  return (
-                    <li key={o.id} className="flex items-center gap-3 px-5 py-3.5">
-                      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                        <p className="truncate text-sm font-medium text-fg">{o.planName}</p>
-                        <p className="truncate text-[13px] text-subtle">
-                          {o.userEmail} · {formatDateTime(o.createdAt)}
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 flex-col items-end gap-1">
-                        <span className="font-display text-sm font-semibold text-fg tabular-nums">{formatMxn(o.priceCents)}</span>
-                        <span className="text-[12px] text-subtle tabular-nums">
-                          {usd(o.costUsd)} · {marginCents >= 0 ? "+" : "−"}
-                          {formatMxn(Math.abs(marginCents))}
-                        </span>
-                      </div>
-                      <div className="hidden shrink-0 sm:block">
-                        <OrderStatusBadge status={o.status} />
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </Card>
-        </section>
-
-        {/* Recent users */}
-        <section aria-labelledby="users" className="flex min-w-0 flex-col gap-3">
-          <SectionTitle>
-            <span id="users">Usuarios recientes</span>
-          </SectionTitle>
-          <Card className="overflow-hidden">
-            {users.length === 0 ? (
-              <p className="px-5 py-8 text-center text-sm text-muted">Sin usuarios todavía.</p>
-            ) : (
-              <ul className="divide-y divide-border">
-                {users.map((u) => (
-                  <li key={u.id} className="flex items-center gap-3 px-5 py-3.5">
-                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                      <p className="flex items-center gap-2 truncate text-sm font-medium text-fg">
-                        <span className="truncate">{u.name}</span>
-                        {u.role === "admin" ? <Badge variant="primary">Admin</Badge> : null}
-                        {!u.verified ? <Badge variant="neutral">Sin verificar</Badge> : null}
-                      </p>
-                      <p className="truncate text-[13px] text-subtle">
-                        {u.email} · {formatDateTime(u.createdAt)}
-                      </p>
-                    </div>
-                    <span className="shrink-0 font-display text-sm font-semibold text-fg tabular-nums">
-                      {formatMxn(u.balanceCents)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-        </section>
-      </div>
+      <section aria-labelledby="activity" className="flex flex-col gap-3">
+        <SectionTitle
+          id="activity"
+          aside={
+            <Link href="/admin/actividad" className="inline-flex items-center gap-1 text-sm text-lavender hover:text-lavender-soft">
+              Ver toda la actividad <ArrowRight aria-hidden className="size-4" />
+            </Link>
+          }
+        >
+          Actividad reciente
+        </SectionTitle>
+        <Card className="overflow-hidden">
+          <ActivityFeed items={activity} now={now} />
+        </Card>
+      </section>
     </div>
   );
 }
