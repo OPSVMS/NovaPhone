@@ -48,6 +48,10 @@ test("panel admin: secciones, ficha de usuario y acciones con bitácora", async 
 
   // Buscar al usuario y abrir su ficha.
   await admin.goto(`/admin/usuarios?q=${encodeURIComponent(userEmail)}`);
+  // La fila muestra sus agregados reales (1 eSIM activa, depositado $300, gastado $39).
+  const row = admin.locator("tr, li, article, a, div").filter({ hasText: userEmail }).filter({ hasText: "1/1" }).first();
+  await expect(row).toBeVisible();
+  await expect(admin.getByText("$300").filter({ visible: true }).first()).toBeVisible();
   await admin.getByRole("link", { name: new RegExp(`Cliente Panel ${testInfo.project.name}`) }).filter({ visible: true }).first().click();
   await expect(admin.getByRole("heading", { level: 1, name: `Cliente Panel ${testInfo.project.name}` })).toBeVisible();
   const userUrl = admin.url();

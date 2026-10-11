@@ -9,6 +9,8 @@ import { emailEnabled } from "./email";
 import { getFxUsdMxn } from "./queries";
 
 const DAY = 86_400_000;
+/** Referencia calificada a users.id para subconsultas correlacionadas (drizzle la emite sin tabla). */
+const UID = dsql.raw(`"users"."id"`);
 const since = (days: number) => new Date(Date.now() - days * DAY);
 const int = (v: unknown) => Number(v ?? 0);
 
@@ -96,8 +98,8 @@ export async function listUsers({ q = "", filter = "all", limit = 100, offset = 
   if (filter === "disabled") conds.push(isNotNull(schema.users.disabledAt));
   if (filter === "admins") conds.push(eq(schema.users.role, "admin"));
   if (filter === "unverified") conds.push(isNull(schema.users.emailVerifiedAt));
-  if (filter === "with-esim") conds.push(dsql`exists (select 1 from orders o where o.user_id = ${schema.users.id} and o.status = 'ready')`);
-  if (filter === "with-number") conds.push(dsql`exists (select 1 from phone_numbers p where p.user_id = ${schema.users.id} and p.status = 'assigned')`);
+  if (filter === "with-esim") conds.push(dsql`exists (select 1 from orders o where o.user_id = ${UID} and o.status = 'ready')`);
+  if (filter === "with-number") conds.push(dsql`exists (select 1 from phone_numbers p where p.user_id = ${UID} and p.status = 'assigned')`);
   const where = conds.length ? and(...conds) : undefined;
 
   const rows = await db
@@ -112,11 +114,11 @@ export async function listUsers({ q = "", filter = "all", limit = 100, offset = 
       clabe: schema.users.clabe,
       createdAt: schema.users.createdAt,
       lastSeenAt: schema.users.lastSeenAt,
-      esims: dsql<number>`(select count(*)::int from orders o where o.user_id = ${schema.users.id} and o.status = 'ready')`,
-      activeEsims: dsql<number>`(select count(*)::int from orders o where o.user_id = ${schema.users.id} and o.status = 'ready' and (o.expires_at is null or o.expires_at > now()) and coalesce(o.esim_status,'') not in ('CANCEL','USED_EXPIRED','UNUSED_EXPIRED','REVOKED'))`,
-      number: dsql<string | null>`(select p.e164 from phone_numbers p where p.user_id = ${schema.users.id} and p.status = 'assigned' limit 1)`,
-      depositedCents: dsql<number>`(select coalesce(sum(d.amount_cents),0)::int from deposits d where d.user_id = ${schema.users.id} and d.status = 'completed')`,
-      spentCents: dsql<number>`(select coalesce(-sum(l.amount_cents),0)::int from ledger l where l.user_id = ${schema.users.id} and l.kind = 'purchase')`,
+      esims: dsql<number>`(select count(*)::int from orders o where o.user_id = ${UID} and o.status = 'ready')`,
+      activeEsims: dsql<number>`(select count(*)::int from orders o where o.user_id = ${UID} and o.status = 'ready' and (o.expires_at is null or o.expires_at > now()) and coalesce(o.esim_status,'') not in ('CANCEL','USED_EXPIRED','UNUSED_EXPIRED','REVOKED'))`,
+      number: dsql<string | null>`(select p.e164 from phone_numbers p where p.user_id = ${UID} and p.status = 'assigned' limit 1)`,
+      depositedCents: dsql<number>`(select coalesce(sum(d.amount_cents),0)::int from deposits d where d.user_id = ${UID} and d.status = 'completed')`,
+      spentCents: dsql<number>`(select coalesce(-sum(l.amount_cents),0)::int from ledger l where l.user_id = ${UID} and l.kind = 'purchase')`,
     })
     .from(schema.users)
     .where(where)
