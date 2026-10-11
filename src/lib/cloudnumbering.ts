@@ -99,7 +99,12 @@ export async function purchaseNumbers(amount = 1, country = process.env.CLOUDNUM
   );
   const added: string[] = [];
   for (const n of order.numbers) {
-    await cn("POST", `/numbers/${n.sid}/endpoints`, { smsEndpointSid: endpointSid, reference: "NovaPhone" }).catch((e) => console.error(e));
+    const voice = await db.query.settings.findFirst({ where: eq(schema.settings.key, "cloudnumbering_voice_endpoint") });
+    await cn("POST", `/numbers/${n.sid}/endpoints`, {
+      smsEndpointSid: endpointSid,
+      ...(voice ? { voiceEndpointSid: voice.value as string } : {}),
+      reference: "NovaPhone",
+    }).catch((e) => console.error(e));
     const [row] = await db
       .insert(schema.phoneNumbers)
       .values({ e164: n.number, country, provider: "cloudnumbering", providerRef: n.sid })
@@ -140,4 +145,35 @@ export async function syncCloudnumberingInventory() {
 /** Desconecta definitivamente un número (deja de cobrarse). Irreversible después de 7 días. */
 export async function disconnectNumber(assignedSid: string) {
   await cn("DELETE", `/numbers/${assignedSid}`);
+}
+
+/** Endpoint de voz (SIP) hacia Telnyx. %e164 se reemplaza por el número marcado. */
+export async function ensureVoiceEndpoint(uri: string) {
+  const list = await cn<{ entries: { sid: string; uri: string; endpointType: string }[] }>("GET", "/endpoints");
+  let sid = list.entries.find((e) => e.uri === uri)?.sid;
+  if (!sid) sid = (await cn<{ sid: string }>("POST", "/endpoints", { description: "NovaPhone voz (Telnyx)", endpointType: "voice", uri, isDefault: true })).sid;
+  await db
+    .insert(schema.settings)
+    .values({ key: "cloudnumbering_voice_endpoint", value: sid })
+    .onConflictDoUpdate({ target: schema.settings.key, set: { value: sid, updatedAt: new Date() } });
+  return sid;
+}
+
+/** Asigna el endpoint de voz a todos los números (conservando el de SMS y la referencia). */
+export async function routeAllNumbersVoice(voiceEndpointSid: string) {
+  const smsEndpointSid = await ensureSmsEndpoint();
+  let page = 1;
+  let routed = 0;
+  for (;;) {
+    const res = await fetch(`${BASE()}/numbers?page=${page}&perPage=100`, { headers: { Authorization: `Bearer ${await token()}` }, cache: "no-store" });
+    const json = (await res.json()) as Envelope<{ entries: (AssignedNumber & { voiceEndpointSid?: string })[] }> & { meta?: { pagination?: { pageCount: number } } };
+    for (const n of json.result?.entries ?? []) {
+      if (n.voiceEndpointSid === voiceEndpointSid && n.smsEndpointSid === smsEndpointSid) continue;
+      await cn("POST", `/numbers/${n.sid}/endpoints`, { voiceEndpointSid, smsEndpointSid, reference: "NovaPhone" });
+      routed++;
+    }
+    if (page >= (json.meta?.pagination?.pageCount ?? 1)) break;
+    page++;
+  }
+  return routed;
 }

@@ -54,6 +54,9 @@ services:
       CLOUDNUMBERING_BASE_URL: "http://mock:4010/cn/v1.1"
       CLOUDNUMBERING_CLIENT_ID: "test-cn-id"
       CLOUDNUMBERING_CLIENT_SECRET: "test-cn-secret"
+      TELNYX_API_KEY: "test-telnyx-key"
+      TELNYX_BASE_URL: "http://mock:4010/telnyx/v2"
+      TELNYX_WEBHOOK_TOKEN: "test-telnyx-token"
     depends_on:
       neon-proxy: { condition: service_started }
       mock: { condition: service_healthy }
@@ -70,6 +73,7 @@ services:
       ESIMACCESS_WEBHOOK_TOKEN: "test-webhook-token"
       MOCK_URL: "http://mock:4010"
       SMS_WEBHOOK_TOKEN: "test-sms-token"
+      TELNYX_WEBHOOK_TOKEN: "test-telnyx-token"
       NEON_SQL_URL: "http://neon-proxy:4444/sql"
       DB_URL: "postgres://postgres:postgres@db.localtest.me:5432/main"
       CI: "1"

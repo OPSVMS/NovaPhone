@@ -43,6 +43,13 @@
       "when": 1791752444348,
       "tag": "0005_admin_panel",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791756061533,
+      "tag": "0006_call_codes",
+      "breakpoints": true
     }
   ]
 }

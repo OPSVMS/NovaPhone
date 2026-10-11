@@ -40,6 +40,7 @@ export async function getCommsHistory(numberId: string, userId: string, limit = 
         status: c.status,
         durationSec: c.durationSec,
         transcript: c.transcript,
+        code: c.code,
         startedAt: c.startedAt.toISOString(),
       }),
     ),

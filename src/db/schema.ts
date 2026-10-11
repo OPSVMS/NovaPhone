@@ -177,6 +177,10 @@ export const callLogs = pgTable("call_logs", {
   durationSec: integer("duration_sec").notNull().default(0),
   /** Transcripción (p. ej. código de verificación dictado por llamada). */
   transcript: text("transcript"),
+  /** Código detectado en la transcripción y cuándo se avisó al cliente. */
+  code: text("code"),
+  notifiedAt: timestamp("notified_at", { withTimezone: true }),
+  answeredAt: timestamp("answered_at", { withTimezone: true }),
   externalId: text("external_id"),
   startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("calls_number_idx").on(t.numberId, t.startedAt), uniqueIndex("calls_external_idx").on(t.externalId)]);

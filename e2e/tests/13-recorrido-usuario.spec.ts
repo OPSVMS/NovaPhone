@@ -90,7 +90,7 @@ test("recorrido completo del usuario sin errores", async ({ page, request }, tes
   await expect(page.getByRole("region", { name: "Mensajes" }).getByText("WhatsApp", { exact: true }).first()).toBeVisible();
   // Llamadas: vacío amigable y luego una llamada registrada por el servicio de voz.
   await page.getByRole("radio", { name: /Llamadas/ }).click();
-  await expect(page.getByText(/aparecerán aquí muy pronto/)).toBeVisible();
+  await expect(page.getByText(/Aún no recibes llamadas/)).toBeVisible();
   const call = await request.post(`/api/webhooks/calls/sip?token=${process.env.SMS_WEBHOOK_TOKEN}`, {
     data: { to: e164, from: "+14155550123", status: "answered", duration: 80, transcript: "Tu código de verificación es 4 4 2 1 9 0", id: `c-${Date.now()}` },
   });

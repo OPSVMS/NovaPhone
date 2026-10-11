@@ -53,8 +53,8 @@ export function NumberSection({ priceMxn }: { priceMxn: number }) {
               </Button>
             </div>
             <p className="text-[13px] leading-relaxed text-subtle">
-              Se paga con tu saldo y se renueva cada 30 días; cancela cuando quieras. Por ahora recibe SMS (las llamadas
-              llegan muy pronto). Algunas apps o bancos no aceptan números virtuales.
+              Se paga con tu saldo y se renueva cada 30 días; cancela cuando quieras. Recibe SMS y también
+              llamadas de verificación: escuchamos el código y te lo mostramos. Algunas apps o bancos no aceptan números virtuales.
             </p>
           </FadeIn>
         </div>

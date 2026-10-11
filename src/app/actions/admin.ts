@@ -245,3 +245,19 @@ export async function adminTogglePlan(_: FormState, form: FormData): Promise<For
   refresh();
   return ok(active ? "Plan visible." : "Plan oculto.");
 }
+
+/** Telnyx + cloudnumbering: configura la recepción de llamadas con transcripción en todos los números. */
+export async function adminSetupVoice(prev: FormState): Promise<FormState> {
+  void prev;
+  const admin = await requireAdmin();
+  const { ensureVoiceRouting, telnyxEnabled } = await import("@/lib/voice");
+  if (!telnyxEnabled()) return fail("Telnyx no está configurado.");
+  try {
+    const r = await ensureVoiceRouting();
+    await audit(admin.id, "voice.setup", "system", null, r);
+    refresh();
+    return ok(`Llamadas configuradas: ${r.routed} número(s) ruteados a ${r.sipUri}.`);
+  } catch (e) {
+    return fail(e instanceof Error ? e.message : "No se pudo configurar.");
+  }
+}

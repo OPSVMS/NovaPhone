@@ -51,6 +51,9 @@ function cnHandle(req, url, raw) {
   return [404, { success: false, error: "Route not found" }];
 }
 
+// ---------- Telnyx Voice API ----------
+const telnyxCommands = [];
+
 // ---------- Openpay (cargos con redirección) ----------
 const charges = new Map();
 
@@ -144,6 +147,13 @@ http.createServer((req, res) => {
       res.statusCode = code;
       return res.end(JSON.stringify(json));
     }
+    const tx = url.pathname.match(/^\/telnyx\/v2\/calls\/([^/]+)\/actions\/([^/]+)$/);
+    if (tx) {
+      if (req.headers.authorization !== "Bearer test-telnyx-key") { res.statusCode = 401; return res.end(JSON.stringify({ errors: [{ detail: "unauthorized" }] })); }
+      telnyxCommands.push({ ccid: decodeURIComponent(tx[1]), action: tx[2], body: raw ? JSON.parse(raw) : {} });
+      return res.end(JSON.stringify({ data: { result: "ok" } }));
+    }
+    if (url.pathname === "/__test/telnyx/commands") return res.end(JSON.stringify(telnyxCommands));
     if (url.pathname === "/__test/cn/numbers") return res.end(JSON.stringify({ numbers: cnNumbers, endpoints: cnEndpoints }));
     // NOVACORE API
     if (url.pathname === "/api/integrations/clabes" && req.method === "POST") {

@@ -26,6 +26,8 @@ export type CommsCall = {
   status: "answered" | "missed" | "voicemail" | "rejected";
   durationSec: number;
   transcript: string | null;
+  /** Código detectado en la llamada (incluye números dictados con palabras). */
+  code?: string | null;
   startedAt: string;
 };
 export type CommsHistory = {
@@ -273,7 +275,7 @@ const CALL_STATUS: Record<CommsCall["status"], { label: string; icon: typeof Pho
 function CallRow({ call: c, now, fresh }: { call: CommsCall; now: number; fresh: boolean }) {
   const s = CALL_STATUS[c.status] ?? CALL_STATUS.missed;
   const Icon = s.icon;
-  const code = c.transcript ? extractCode(c.transcript) : null;
+  const code = c.code ?? (c.transcript ? extractCode(c.transcript) : null);
   return (
     <motion.li {...rowMotion} className={rowClass(fresh)}>
       <div className="flex items-start gap-3">
@@ -324,7 +326,7 @@ function EmptyMessages({ e164 }: { e164: string }) {
             <CopyButton value={national} ariaLabel="Copiar número sin prefijo" variant="ghost" size="icon-sm" />
           </span>
         </Step>
-        <Step n={3}>Si tarda, toca “Reenviar SMS”. Aún no recibimos llamadas, así que elige siempre SMS.</Step>
+        <Step n={3}>Si el SMS no llega, toca “Llamarme”: contestamos, escuchamos el código y te lo mostramos aquí.</Step>
       </ol>
     </div>
   );
@@ -347,9 +349,9 @@ function EmptyCalls() {
       <span className="grid size-10 place-items-center rounded-xl border border-border bg-surface-2 text-lavender">
         <PhoneCall aria-hidden className="size-5" />
       </span>
-      <p className="font-medium text-fg">Las llamadas aparecerán aquí muy pronto</p>
+      <p className="font-medium text-fg">Aún no recibes llamadas</p>
       <p className="max-w-[42ch] text-sm leading-relaxed text-muted">
-        Estamos conectando la recepción de llamadas. Mientras tanto, tu número recibe SMS y códigos al instante.
+        Si una app te verifica por llamada, contestamos, escuchamos el código y aquí lo verás, también en tu correo.
       </p>
     </div>
   );

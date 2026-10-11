@@ -199,8 +199,8 @@ function NoNumber({
       </div>
 
       <Alert variant="info" icon={<ShieldCheck aria-hidden />} title="Antes de comprar">
-        Por ahora el número recibe SMS y códigos; las llamadas llegan muy pronto. Algunas apps o bancos pueden no aceptar
-        números virtuales.
+        El número recibe SMS y llamadas de verificación (te mostramos el código que dictan). Algunas apps o bancos pueden no
+        aceptar números virtuales.
       </Alert>
     </div>
   );

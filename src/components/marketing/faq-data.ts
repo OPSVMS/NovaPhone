@@ -67,7 +67,7 @@ const ALL = {
   },
   llamadas: {
     q: "¿Puedo recibir llamadas?",
-    a: "Muy pronto. Por ahora el número recibe SMS y códigos de verificación. Si una app te ofrece verificar por llamada, elige la opción de SMS.",
+    a: "Sí, las llamadas de verificación. Si una app te llama para dictarte un código, contestamos automáticamente, lo escuchamos y te lo mostramos en tu panel y en tu correo. No es para conversaciones.",
   },
 } satisfies Record<string, FaqItem>;
 
