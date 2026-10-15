@@ -6,7 +6,7 @@ export function Skeleton({ className, ...props }: ComponentProps<"div">) {
   return (
     <div
       aria-hidden
-      className={clsx("shimmer rounded-lg bg-white/[0.04] motion-reduce:animate-none", className)}
+      className={clsx("shimmer rounded-lg bg-surface-2 motion-reduce:animate-none", className)}
       {...props}
     />
   );

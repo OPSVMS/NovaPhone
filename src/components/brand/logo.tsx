@@ -32,9 +32,9 @@ function MarkArt({ gradientId, variant }: MarkArtProps) {
             y2="8"
             gradientUnits="userSpaceOnUse"
           >
-            <stop offset="0" stopColor="#7C3AED" />
-            <stop offset="0.55" stopColor="#A78BFA" />
-            <stop offset="1" stopColor="#E4DEFF" />
+            <stop offset="0" stopColor="#0A2F6B" />
+            <stop offset="0.55" stopColor="#0A4FA3" />
+            <stop offset="1" stopColor="#3B8CE6" />
           </linearGradient>
         </defs>
       ) : null}
@@ -52,7 +52,7 @@ function MarkArt({ gradientId, variant }: MarkArtProps) {
         cx="32"
         cy="32"
         r="4.5"
-        fill={variant === "mono" ? "currentColor" : "#7DE3F4"}
+        fill={variant === "mono" ? "currentColor" : "#FFA31A"}
       />
     </>
   );
@@ -63,7 +63,7 @@ type BaseSvgProps = Omit<SVGProps<SVGSVGElement>, "children" | "viewBox">;
 export type LogoMarkProps = BaseSvgProps & {
   /** Rendered size in px (square). Default 32. */
   size?: number;
-  /** "gradient" (default, for dark surfaces) or "mono" (uses currentColor). */
+  /** "gradient" (default: Azul Nova strokes + marigold node, for light surfaces) or "mono" (uses currentColor). */
   variant?: MarkVariant;
   /** Accessible label. Pass `null` to render decoratively (aria-hidden). */
   title?: string | null;

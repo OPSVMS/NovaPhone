@@ -7,6 +7,7 @@ import clsx from "clsx";
 import {
   Activity,
   ArrowDownLeft,
+  Filter,
   ArrowLeftRight,
   CardSim,
   LayoutDashboard,
@@ -22,6 +23,7 @@ const ITEMS = [
   { href: "/admin/depositos", label: "Depósitos", icon: ArrowDownLeft, exact: false },
   { href: "/admin/numeros", label: "Números", icon: MessageSquareText, exact: false },
   { href: "/admin/movimientos", label: "Movimientos", icon: ArrowLeftRight, exact: false },
+  { href: "/admin/embudo", label: "Embudo", icon: Filter, exact: false },
   { href: "/admin/actividad", label: "Actividad", icon: Activity, exact: false },
   { href: "/admin/sistema", label: "Sistema", icon: ServerCog, exact: false },
 ];

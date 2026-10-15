@@ -27,7 +27,7 @@ export default async function RegisterPage({ searchParams }: PageProps<"/registr
         </p>
       </div>
       <ul className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 text-[13px] text-muted">
-        {["Sin contratos", "Red Telcel 5G", "Paga con SPEI o USDT"].map((t) => (
+        {["Sin contratos", "Red Telcel 5G", "Paga con tarjeta o SPEI"].map((t) => (
           <li key={t} className="inline-flex items-center gap-1.5">
             <Check className="size-3.5 text-lavender" aria-hidden />
             {t}

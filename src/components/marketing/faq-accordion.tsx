@@ -1,6 +1,7 @@
 "use client";
 
 import clsx from "clsx";
+import Link from "next/link";
 import { useId, useState } from "react";
 import { motion } from "motion/react";
 import { Plus } from "lucide-react";
@@ -28,7 +29,7 @@ export function FaqAccordion({ items, defaultOpen = 0 }: { items: FaqItem[]; def
                 aria-expanded={isOpen}
                 aria-controls={panelId}
                 onClick={() => setOpen(isOpen ? null : i)}
-                className="group flex min-h-14 w-full items-center justify-between gap-4 px-5 py-4 text-left text-[15px] font-medium text-fg transition-colors duration-200 ease-out-expo hover:bg-white/[0.02] focus-visible:-outline-offset-2 sm:px-6 sm:text-base"
+                className="group flex min-h-14 w-full items-center justify-between gap-4 px-5 py-4 text-left text-base font-semibold text-fg transition-colors duration-200 ease-out-expo hover:bg-surface-2/60 focus-visible:-outline-offset-2 sm:px-6 sm:text-base"
               >
                 {item.q}
                 <span
@@ -36,7 +37,7 @@ export function FaqAccordion({ items, defaultOpen = 0 }: { items: FaqItem[]; def
                   className={clsx(
                     "grid size-7 shrink-0 place-items-center rounded-full border transition-[transform,border-color,color,background-color] duration-300 ease-out-expo",
                     isOpen
-                      ? "rotate-45 border-lavender/30 bg-primary/10 text-lavender"
+                      ? "rotate-45 border-primary bg-primary text-primary-foreground"
                       : "border-border text-muted group-hover:border-border-strong group-hover:text-fg",
                   )}
                 >
@@ -55,7 +56,20 @@ export function FaqAccordion({ items, defaultOpen = 0 }: { items: FaqItem[]; def
               transition={{ height: { duration: 0.4, ease: EASE }, opacity: { duration: 0.25, ease: EASE } }}
               className="overflow-hidden"
             >
-              <p className="max-w-[62ch] px-5 pb-5 text-[15px] leading-relaxed text-muted sm:px-6">{item.a}</p>
+              <div className="flex max-w-[62ch] flex-col gap-2 px-5 pb-5 text-[15px] leading-relaxed text-muted sm:px-6">
+                <p>{item.a}</p>
+                {item.link ? (
+                  item.link.href.startsWith("http") ? (
+                    <a href={item.link.href} target="_blank" rel="noopener noreferrer" className="w-fit font-semibold text-link hover:underline">
+                      {item.link.label}
+                    </a>
+                  ) : (
+                    <Link href={item.link.href} className="w-fit font-semibold text-link hover:underline">
+                      {item.link.label}
+                    </Link>
+                  )
+                ) : null}
+              </div>
             </motion.div>
           </div>
         );

@@ -179,7 +179,7 @@ export function PlanPicker({
           <div className="mt-2">{summary}</div>
           {!enough ? (
             <Alert variant="warning" className="mt-3" title={`Te faltan ${formatMxn(missing)}`}>
-              Agrega saldo con SPEI o USDT y regresa a terminar tu compra.
+              Agrega saldo con SPEI o tarjeta y regresa a terminar tu compra.
             </Alert>
           ) : null}
           {state?.error ? (

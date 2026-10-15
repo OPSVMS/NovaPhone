@@ -42,7 +42,8 @@ export async function purchasePlan(user: { id: string; email: string }, planId: 
   return { ok: true, orderId: order.id };
 }
 
-async function failAndRefund(order: Order, error: string) {
+/** Marca la orden como reembolsada y devuelve el precio al saldo (solo si seguía aprovisionándose). Regresa si reembolsó. */
+export async function failAndRefund(order: Order, error: string) {
   const [updated] = await db
     .update(schema.orders)
     .set({ status: "refunded", error, updatedAt: new Date() })
@@ -51,6 +52,7 @@ async function failAndRefund(order: Order, error: string) {
   if (updated) {
     await adjustBalance({ userId: order.userId, amountCents: order.priceCents, kind: "refund", description: `Reembolso ${order.planName}`, refId: order.id });
   }
+  return !!updated;
 }
 
 /** Consulta al proveedor y actualiza la orden. Envía el correo la primera vez que queda lista. */
@@ -84,11 +86,16 @@ export async function refreshOrder(order: Order): Promise<Order> {
     const user = await db.query.users.findFirst({ where: eq(schema.users.id, order.userId) });
     if (claimed && user) {
       const appUrl = process.env.APP_URL ?? "";
+      // Compra directa con tarjeta: el correo lleva a la página de éxito (no requiere sesión) y explica cómo entrar.
+      const checkout = await db.query.cardCheckouts.findFirst({ where: eq(schema.cardCheckouts.orderId, order.id), columns: { id: true, accessToken: true } });
       await sendEsimReady(user.email, {
         planName: updated.planName,
         activationCode: updated.activationCode,
-        orderUrl: `${appUrl}/app/esims/${order.id}`,
+        orderId: order.id,
+        orderUrl: checkout ? `${appUrl}/compra/${checkout.id}?t=${checkout.accessToken}` : `${appUrl}/app/esims/${order.id}`,
         qrDataUrl: `${appUrl}/api/qr/${order.id}?sig=${signValue(order.id)}`,
+        // Cuenta creada por la compra (aún sin reclamar): explica cómo crear la contraseña.
+        accountUrl: checkout && !user.emailVerifiedAt ? `${appUrl}/recuperar?email=${encodeURIComponent(user.email)}` : undefined,
       });
     }
   }
@@ -104,3 +111,17 @@ export async function getUserOrders(userId: string) {
 }
 
 export const appleInstallUrl = (ac: string) => `https://esimsetup.apple.com/esim_qrcode_provisioning?carddata=${ac}`;
+/** Instalación con un toque en Android (Android 10+ con soporte de Google). */
+export const androidInstallUrl = (ac: string) => `https://esimsetup.android.com/esim_qrcode_provisioning?carddata=${encodeURIComponent(ac)}`;
+
+const DELAY = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Justo después de ordenar: unos cuantos intentos para tener el perfil sin esperar al webhook del proveedor. */
+export async function pollOrder(order: Order, tries = 4, delayMs = 2500): Promise<Order> {
+  let current = order;
+  for (let i = 0; i < tries && current.status === "provisioning" && current.providerOrderNo; i++) {
+    await DELAY(delayMs);
+    current = await refreshOrder(current).catch(() => current);
+  }
+  return current;
+}

@@ -8,11 +8,10 @@ import { db, schema } from "@/db";
 import { requireUser, requireAdmin } from "@/lib/session";
 import { createDeposit, completeDeposit, MIN_DEPOSIT_MXN, MAX_DEPOSIT_MXN } from "@/lib/deposits";
 import { purchasePlan } from "@/lib/orders";
-import { getUsdMxn } from "@/lib/fx";
 import type { FormState } from "./auth";
 
 const depositSchema = z.object({
-  method: z.enum(["spei", "usdt"]),
+  method: z.literal("spei", "Método no disponible"),
   amount: z.coerce.number().int("Usa montos enteros").min(MIN_DEPOSIT_MXN, `Mínimo $${MIN_DEPOSIT_MXN}`).max(MAX_DEPOSIT_MXN, `Máximo $${MAX_DEPOSIT_MXN.toLocaleString("es-MX")}`),
 });
 
@@ -20,7 +19,7 @@ export async function requestDeposit(_: FormState, form: FormData): Promise<Form
   const user = await requireUser();
   const parsed = depositSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
-  const dep = await createDeposit(user.id, parsed.data.method, parsed.data.amount, await getUsdMxn());
+  const dep = await createDeposit(user.id, parsed.data.method, parsed.data.amount);
   redirect(`/app/fondos/${dep.id}`);
 }
 
@@ -56,19 +55,13 @@ const cardSchema = z.object({
   amount: z.coerce.number().int("Usa montos enteros").min(MIN_DEPOSIT_MXN, `Mínimo $${MIN_DEPOSIT_MXN}`).max(20_000, "Máximo $20,000 con tarjeta"),
 });
 
-/** Depósito con tarjeta vía Openpay: redirige a la página segura de pago. */
+/** Recarga de saldo con tarjeta vía Stripe Checkout (MXN): redirige a la página segura de pago. */
 export async function payWithCard(_: FormState, form: FormData): Promise<FormState> {
   const user = await requireUser();
-  const { openpayEnabled, createCardDeposit } = await import("@/lib/openpay");
-  if (!openpayEnabled()) return { error: "El pago con tarjeta estará disponible muy pronto." };
   const parsed = cardSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
-  let url: string;
-  try {
-    ({ url } = await createCardDeposit(user, parsed.data.amount));
-  } catch (e) {
-    console.error(e);
-    return { error: "No pudimos iniciar el pago con tarjeta. Intenta de nuevo." };
-  }
-  redirect(url);
+  const { startCardDeposit } = await import("@/lib/checkout");
+  const result = await startCardDeposit(user, parsed.data.amount);
+  if ("error" in result) return { error: result.error };
+  redirect(result.url);
 }

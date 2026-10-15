@@ -5,12 +5,11 @@ import { db, schema } from "@/db";
 import { completeDeposit, creditClabeDeposit } from "@/lib/deposits";
 
 /**
- * Webhook de pagos entrantes (core bancario SPEI y detector USDT).
+ * Webhook de pagos entrantes del core bancario (SPEI). USDT ya no se acepta.
  * Header `x-novaphone-signature`: HMAC-SHA256 hex del body crudo con DEPOSITS_WEBHOOK_SECRET.
  * Body:
  *   SPEI con referencia: { "method": "spei", "reference": "12345678", "amountMxn": 500, "externalId": "<clave de rastreo>" }
  *   SPEI a CLABE personal: { "method": "spei", "clabe": "646180...", "amountMxn": 599, "externalId": "<clave de rastreo>" }
- *   USDT: { "method": "usdt", "amountUsdt": "27.4123", "externalId": "<tx hash>" }
  */
 export async function POST(req: NextRequest) {
   const raw = await req.text();
@@ -19,8 +18,9 @@ export async function POST(req: NextRequest) {
   if (sig.length !== expected.length || !timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
     return NextResponse.json({ ok: false, error: "invalid signature" }, { status: 401 });
   }
-  const body = JSON.parse(raw) as { method: "spei" | "usdt"; reference?: string; clabe?: string; amountMxn?: number; amountUsdt?: string; externalId: string };
+  const body = JSON.parse(raw) as { method: string; reference?: string; clabe?: string; amountMxn?: number; externalId: string };
   if (!body.externalId) return NextResponse.json({ ok: false, error: "externalId required" }, { status: 400 });
+  if (body.method !== "spei") return NextResponse.json({ ok: false, error: "unsupported method" }, { status: 400 });
 
   const dup = await db.query.deposits.findFirst({ where: eq(schema.deposits.externalId, body.externalId) });
   if (dup) return NextResponse.json({ ok: true, depositId: dup.id, duplicate: true });
@@ -33,16 +33,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, depositId: dep.id, credited: true });
   }
 
-  const dep =
-    body.method === "spei" && body.reference
-      ? await db.query.deposits.findFirst({ where: and(eq(schema.deposits.reference, body.reference), eq(schema.deposits.status, "pending")) })
-      : body.method === "usdt" && body.amountUsdt
-        ? await db.query.deposits.findFirst({ where: and(eq(schema.deposits.expectedUsdt, Number(body.amountUsdt).toFixed(4)), eq(schema.deposits.status, "pending")) })
-        : undefined;
+  const dep = body.reference
+    ? await db.query.deposits.findFirst({ where: and(eq(schema.deposits.reference, body.reference), eq(schema.deposits.status, "pending"), eq(schema.deposits.method, "spei")) })
+    : undefined;
   if (!dep) return NextResponse.json({ ok: false, error: "deposit not found" }, { status: 404 });
 
   // SPEI: se acredita lo realmente recibido.
-  const amountCents = body.method === "spei" && body.amountMxn ? Math.round(body.amountMxn * 100) : undefined;
+  const amountCents = body.amountMxn ? Math.round(body.amountMxn * 100) : undefined;
   const done = await completeDeposit(dep.id, { externalId: body.externalId, amountCents, meta: { webhook: body } });
   return NextResponse.json({ ok: true, depositId: dep.id, credited: !!done });
 }

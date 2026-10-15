@@ -40,21 +40,17 @@ export async function login(page: Page, email: string, password = PASSWORD) {
   await page.locator('form button[type="submit"]').click();
 }
 
-/** Solicita un depósito desde la UI y regresa la referencia (y monto USDT si aplica). */
-export async function requestDeposit(page: Page, amount: number, method: "spei" | "usdt" = "spei") {
-  await page.goto("/app/fondos");
-  if (method === "usdt") await page.getByRole("radio", { name: /USDT/ }).click();
-  const input = page.locator('input[name="amount"]');
-  await input.fill(String(amount));
-  await input.locator("xpath=ancestor::form").locator('button[type="submit"]').click();
-  await page.waitForURL(/\/app\/fondos\/[0-9a-f-]{36}/);
-  const reference = (await page.locator(".font-mono").filter({ hasText: /^\d{8}$/ }).first().textContent())!.trim();
-  let usdt: string | undefined;
-  if (method === "usdt") {
-    const text = await page.getByText(/Envía exactamente/).textContent();
-    usdt = text!.match(/(\d+\.\d{4}) USDT/)![1];
-  }
-  return { reference, usdt, url: page.url() };
+/**
+ * Solicitud de depósito SPEI con referencia pendiente (en E2E todos los usuarios tienen CLABE personal, así que la UI
+ * ya no muestra el formulario con referencia; se crea directo en la base como lo haría `createDeposit`).
+ */
+export async function pendingSpeiDeposit(email: string, amountMxn: number) {
+  const reference = String(10_000_000 + Math.floor(Math.random() * 89_999_999));
+  const [row] = await dbQuery<{ id: string }>(
+    "insert into deposits (user_id, method, amount_cents, reference) select id, 'spei', $2::int, $3 from users where email = $1 returning id",
+    [email, amountMxn * 100, reference],
+  );
+  return { id: row.id, reference };
 }
 
 export function signedDeposit(request: APIRequestContext, body: Record<string, unknown>, secret = process.env.DEPOSITS_WEBHOOK_SECRET!) {

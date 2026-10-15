@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { register, requestDeposit } from "./helpers";
+import { register, pendingSpeiDeposit, emailOf } from "./helpers";
 
 test.describe.configure({ mode: "serial" });
 
@@ -7,7 +7,7 @@ test("admin aprueba un depósito pendiente y el usuario recibe el saldo", async 
   const userCtx = await browser.newContext();
   const user = await userCtx.newPage();
   await register(user, { name: "Cliente Pendiente" });
-  const { reference } = await requestDeposit(user, 300, "usdt");
+  const { reference } = await pendingSpeiDeposit(emailOf(user), 300);
 
   const adminCtx = await browser.newContext();
   const admin = await adminCtx.newPage();

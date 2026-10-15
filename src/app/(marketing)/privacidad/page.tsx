@@ -19,9 +19,6 @@ const sections: LegalSection[] = [
           <li>Historial de recargas, compras y eSIMs asociadas a tu cuenta.</li>
           <li>Datos técnicos de la eSIM (por ejemplo, ICCID y consumo de datos).</li>
         </ul>
-        <p>
-          <strong className="font-medium text-fg">No pedimos</strong> CURP, INE ni documentos de identidad.
-        </p>
       </>
     ),
   },
@@ -49,9 +46,8 @@ const sections: LegalSection[] = [
     title: "Pagos",
     body: (
       <p>
-        Las transferencias SPEI y los envíos de USDT se registran para acreditar tu saldo. Las transacciones en blockchain
-        son públicas por naturaleza; no asociamos tu identidad a tu dirección más allá de lo necesario para acreditar el
-        pago.
+        Los pagos con tarjeta, Apple Pay y Google Pay los procesa Stripe; NovaPhone no recibe ni guarda el número
+        completo de tu tarjeta. Las transferencias SPEI se registran para acreditar tu pago o tu saldo.
       </p>
     ),
   },

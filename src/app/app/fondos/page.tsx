@@ -6,26 +6,17 @@ import { db, schema } from "@/db";
 import { requireUser } from "@/lib/session";
 import { getUserDeposits, MAX_DEPOSIT_MXN, MIN_DEPOSIT_MXN } from "@/lib/deposits";
 import { ensureClabe } from "@/lib/novacore";
-import { openpayEnabled } from "@/lib/openpay";
+import { cardFeeConfig, CARD_DEPOSIT_MAX_MXN } from "@/lib/checkout";
+import { paymentsEnabled } from "@/lib/payments";
 import { formatMxn } from "@/lib/pricing";
 import { Card } from "@/components/ui/card";
 import { FadeIn } from "@/components/motion/fade-in";
 import { PageHeader } from "@/components/app/page-header";
 import { FundsMethods, type FundsMethod } from "@/components/app/funds-methods";
-import type { CardFeeConfig } from "@/components/app/card-fee";
 import { DepositStatusBadge, methodLabel } from "@/components/app/status-badges";
 import { formatDateTime } from "@/components/app/format";
 
 export const metadata: Metadata = { title: "Agregar fondos" };
-
-const CARD_MAX_MXN = 20_000;
-
-/** Misma configuración que `cardFeeCents` en src/lib/openpay.ts. */
-const cardFeeConfig = (): CardFeeConfig => ({
-  pct: Number(process.env.OPENPAY_FEE_PCT ?? 2.9),
-  fixedMxn: Number(process.env.OPENPAY_FEE_FIXED ?? 2.5),
-  pass: process.env.OPENPAY_PASS_FEES !== "false",
-});
 
 /** CLABE personal; la asigna en NOVACORE la primera vez (si está configurado). */
 async function personalClabe(user: { id: string; name: string; email: string }) {
@@ -44,7 +35,6 @@ async function personalClabe(user: { id: string; name: string; email: string }) 
 }
 
 function parseMethod(v: unknown): FundsMethod {
-  if (v === "usdt") return "usdt";
   if (v === "card" || v === "tarjeta") return "card";
   return "spei";
 }
@@ -74,12 +64,12 @@ export default async function FundsPage({ searchParams }: PageProps<"/app/fondos
             initialMethod={parseMethod(sp.metodo)}
             clabe={clabe}
             beneficiary={process.env.SPEI_BENEFICIARY || "MACAIBA COMMERCE"}
-            cardEnabled={openpayEnabled()}
+            cardEnabled={paymentsEnabled()}
             fee={cardFeeConfig()}
             defaultAmount={defaultAmount}
             min={MIN_DEPOSIT_MXN}
             max={MAX_DEPOSIT_MXN}
-            cardMax={CARD_MAX_MXN}
+            cardMax={CARD_DEPOSIT_MAX_MXN}
           />
         </Card>
       </FadeIn>

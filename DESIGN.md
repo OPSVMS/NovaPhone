@@ -1,14 +1,26 @@
 # NovaPhone Design System
 
-Dark-only, minimal, "quiet web3". The references are Linear, Vercel, Phantom and Arc. Prefer restraint to decoration. UI copy is Spanish (es-MX).
+**Light-first, trustworthy, Mexican-friendly** ("Azul Nova", since 2026-10-15). Think a well-run Mexican telco or fintech: clean paper, deep blue for trust, one warm marigold accent, big legible type on phones. The references are Mercado Pago, Nu México, Revolut and Apple's setup screens. Trust is the first purchase driver, so every screen answers quickly: *¿qué es? ¿cuánto cuesta? ¿cómo lo activo? ¿en qué celulares? ¿y si no funciona?* UI copy is Spanish (es-MX, *tú*).
+
+> The previous dark "quiet web3" look is retired. Token **names** are unchanged so app/admin pages keep working; only the values were remapped (see "Legacy names").
+
+## Copy rules
+
+- One idea per sentence. No jargon. Explain "eSIM" once per page: *"una SIM digital que se instala con un QR, sin chip físico"*.
+- Hero formula: promise + proof + action ("Internet para tu celular en 2 minutos." → "eSIM de datos para México. Sin contrato ni trámites. 20 GB por $599 MXN." → picker).
+- Prices always read as pesos: "$599 MXN" (`formatMxn`) or "$599" next to a visible "MXN". Never "US$".
+- Payment row under every buy button: "Pago seguro con Stripe · Visa, Mastercard, Amex, Apple Pay, Google Pay · o SPEI". No crypto/USDT anywhere public.
+- **Compliance:** never write "sin registro", "sin papeleo", "no pedimos CURP/INE" or "evita el registro" anywhere. The only allowed wording is the exact FAQ answer from `docs/ads/POLICY.md` §6.2 (legal status only, no promise, no adjectives): *"La vinculación de líneas con CURP que coordina la CRT aplica a las líneas móviles con número telefónico. La eSIM de NovaPhone es solo de datos: no te da un número mexicano, llamadas ni SMS, así que no sustituye tu línea. Si tienes una línea móvil, vincularla con tu compañía en las fechas oficiales sigue siendo tu responsabilidad; NovaPhone no cambia esa obligación. Información oficial: gob.mx/crt."*
+- Say what is *not* included near the price: "Solo datos: … No incluye número ni llamadas."
 
 ## Brand
 
-- **Mark ("Nodo")**: an N drawn as two identical, point-symmetric strokes (device and network) that meet at a cyan point of light (the *nova*). It sits on a 64-unit grid, uses a 9u monoline with round caps and joins, a 45° diagonal and a 4.5u node.
-- **Wordmark**: "NovaPhone" set in Sora SemiBold with −25 tracking. It is outlined to paths, so it never depends on font loading.
-- Files in `/brand`: `novaphone-mark.svg` (glyph, transparent, for dark backgrounds), `novaphone-app-icon.svg` (glyph on a dark tile), `novaphone-logo.svg` (dark backgrounds), `novaphone-logo-light.svg` (light backgrounds), `novaphone-mark-512.png` and `novaphone-mark-64.png` (the **tile** version: opaque, QR- and avatar-safe), and `novaphone-logo.png`.
-- App icons: `src/app/icon.svg` (tile favicon), `src/app/apple-icon.png` (180×180, full-bleed), and `src/app/opengraph-image.tsx`.
-- Do **not** recolour the mark, add effects to it, place it on purple fills, or rebuild the N with a font. Its clear space is ≥ the width of one stroke on every side.
+- **Mark ("Nodo")**: an N drawn as two identical, point-symmetric strokes (device and network) that meet at a point of light (the *nova*). 64-unit grid, 9u monoline, round caps and joins, 45° diagonal, 4.5u node. Geometry unchanged.
+- **Colours (2026-10)**: strokes are an Azul Nova gradient (`#0A2F6B → #0A4FA3 → #3B8CE6`) and the node is **marigold** `#FFA31A` (cempasúchil). On dark/blue fills use the on-dark files (strokes `#3B8CE6 → #DCEBFF`).
+- **Wordmark**: "NovaPhone" in Sora SemiBold, −25 tracking, outlined to paths (`currentColor`, so it inherits `text-fg` = navy ink).
+- Files in `/brand`: `novaphone-logo-light.svg` (**primary**, light backgrounds), `novaphone-logo.svg` (on dark), `novaphone-mark.svg` (light backgrounds), `novaphone-mark-on-dark.svg`, `novaphone-app-icon.svg` (white mark on an Azul Nova tile, marigold node), PNG exports (`novaphone-mark-512.png`, `novaphone-mark-64.png`, `novaphone-logo.png`).
+- App icons: `src/app/icon.svg` (blue tile), `src/app/apple-icon.png` (180×180), `src/app/opengraph-image.tsx` (light, with "20 GB por $599 MXN").
+- Don't add effects to the mark, rebuild the N with a font, or put the colour mark on marigold. Clear space ≥ one stroke width.
 
 ```tsx
 import { Logo, LogoMark } from "@/components/brand/logo";
@@ -19,44 +31,48 @@ import { Logo, LogoMark } from "@/components/brand/logo";
 <LogoMark variant="mono" className="text-muted" />  // single-colour, uses currentColor
 ```
 
-The wordmark uses `currentColor`, so it inherits `text-fg` from `<body>`. Both components are server-safe (no `"use client"`).
-
 ## Tokens (Tailwind v4 `@theme`, `src/app/globals.css`)
 
-Every token becomes a utility: `bg-surface`, `text-muted`, `border-border`, `rounded-card`, `shadow-glow`, `ease-out-expo`, and so on. Alpha works on any colour, for example `bg-primary/10` or `border-danger/25`.
+Every token becomes a utility: `bg-surface`, `text-muted`, `border-border`, `rounded-card`, `shadow-raised`, `ease-out-expo`, and so on. Alpha works on any colour (`bg-primary/10`, `border-danger/25`).
 
 | Token | Value | Use |
 |---|---|---|
-| `bg` | `#07050D` | page background (already on `<body>`) |
-| `surface` | `#0E0A18` | cards, panels |
-| `surface-2` | `#151024` | inputs, nested and raised areas, hover |
-| `surface-3` | `#1D1731` | pressed / selected |
-| `border` | white 8% | default 1px hairlines |
-| `border-strong` | white 14% | hover, emphasis, dashed empty states |
-| `fg` | `#F5F3FF` | primary text |
-| `muted` | `#A39DB8` | secondary text (7.8:1) |
-| `subtle` | `#7A7393` | tertiary, placeholders, captions (4.5:1; never for body copy) |
-| `primary` / `primary-hover` | `#7652F0` / `#8466F4` | CTA fills only (white text 5:1) |
-| `primary-foreground` | `#FFFFFF` | text on primary |
-| `lavender` / `lavender-soft` | `#A78BFA` / `#C4B5FD` | brand-coloured text, links, icons, focus ring |
-| `accent` | `#7DE3F4` | cyan "nova"; ≤ 1 use per view (live dot, highlight word) |
-| `success` `warning` `danger` `info` | `#34D399` `#FBBF24` `#F87171` `#93C5FD` | status text; use `/10` fills and `/25` borders |
+| `bg` | `#F5F7FB` | page background (cool paper; already on `<body>`) |
+| `surface` | `#FFFFFF` | cards, panels, header when scrolled, footer |
+| `surface-2` | `#EEF2F8` | inputs, nested areas, hover |
+| `surface-3` | `#E2E9F3` | pressed / selected |
+| `night` / `night-2` | `#0A2547` / `#0E3263` | optional deep-navy bands; text on them: `on-night` / `on-night-muted` |
+| `border` / `border-strong` | `#DFE6EF` / `#C3CFDF` | hairlines / emphasis |
+| `fg` | `#0B1B33` | primary text (16.9:1) |
+| `muted` | `#44536A` | secondary text (8.1:1) |
+| `subtle` | `#5B687C` | captions, placeholders (5.6:1; never body copy) |
+| `primary` / `primary-hover` | `#0A4FA3` / `#083F85` | **Azul Nova**: CTA fills, selected plan ring, step icons |
+| `primary-foreground` | `#FFFFFF` | text on primary (8.2:1) |
+| `link` / `link-hover` | `#0A55B0` / `#083F85` | links, brand-coloured text and icons |
+| `ring` | `#1F6FD1` | focus ring |
+| `marigold` / `marigold-soft` / `marigold-ink` | `#FFA31A` / `#FFF1DA` / `#9A4A00` | warm accent: "Recomendado" badge, step numbers, the nova node. Fill only; marigold-family text uses `marigold-ink` |
+| `accent` | `#0B7F72` | teal: live dots, small highlights (text-safe 4.9:1) |
+| `whatsapp` | `#128C4B` | WhatsApp glyph/button only |
+| `success` `warning` `danger` `info` | `#0F7A45` `#9A5600` `#C42B2B` `#1D5FC4` | status text; `/10` fills, `/25` borders |
+
+**Legacy names kept for compatibility** (app/admin): `lavender` → `#0A55B0` (= link), `lavender-soft` → `#1859A8`, `accent` → teal, `shadow-glow*` → soft blue/marigold halos, `glass*` → frosted white. Prefer `link`, `marigold`, `shadow-raised` in new code. Hard-coded `bg-white/[0.0x]` hovers in old app files are now invisible (harmless); replace them with `bg-hover` when touching those files.
 
 **Note:** the text-colour token is `fg` (`text-fg`), not `text`.
 
 - **Fonts**: `font-display` (Sora) for headings, prices and big numbers; `font-sans` (Geist, the default); `font-mono` (Geist Mono) for CLABE, ICCID, references and codes. `h1`–`h4` get `font-display`, `-0.02em` tracking and balanced wrapping automatically.
 - **Radii**: `rounded-control` (12px: buttons, inputs), `rounded-card` (20px), `rounded-panel` (28px: hero panels, dialogs), `rounded-full` (badges, pills).
-- **Shadows**: `shadow-card` (default on cards), `shadow-glow-sm`, `shadow-glow` and `shadow-glow-accent`. Use at most one glowing element per viewport.
+- **Shadows**: `shadow-card` (default on cards), `shadow-raised` (picker, selected plan, sheets). `shadow-glow*` are legacy soft halos; avoid in new code.
 - **Easing**: `ease-out-expo` for every UI transition; durations are 200ms for hover/press and 300–700ms for reveals.
 
 ### Utility classes
 
 | Class | What it does |
 |---|---|
-| `glass` / `glass-strong` | translucent surface, blur, hairline border and top highlight (`glass-strong` is for sticky headers and bottom bars) |
+| `glass` / `glass-strong` | frosted white surface, blur, hairline border (`glass-strong` for sticky bars) |
+| `bg-hover` | navy 4% wash for hovers on light surfaces (replaces `bg-white/[0.04]`) |
 | `glow`, `glow-sm`, `glow-accent` | soft halo box-shadows |
-| `text-gradient` | white → lavender (headline) |
-| `text-gradient-brand` | lavender → cyan (1–3 words max) |
+| `text-gradient` | navy → Azul Nova (headline) |
+| `text-gradient-brand` | Azul Nova → teal (1–3 words max) |
 | `border-gradient` | gradient hairline border on a `surface` fill (same as `<Card variant="gradient">`) |
 | `noise` | film grain via `::after`; the element must be positioned |
 | `bg-grid` | 48px faint grid; pair with `mask-fade-radial` or `mask-fade-b` |
@@ -66,7 +82,7 @@ Every token becomes a utility: `bg-surface`, `text-muted`, `border-border`, `rou
 | `animate-fade-up` | one-shot CSS entrance (no JS) |
 | `tabular-nums` | **always** on prices, balances, GB and countdowns |
 
-Global behaviour already in place: focus-visible lavender ring (2px, offset 2), violet text selection, thin dark scrollbars, smooth scroll (only without reduced motion), `color-scheme: dark`, and `lang="es-MX"`.
+Global behaviour already in place: focus-visible `ring` outline (2px, offset 2), light-blue text selection, thin scrollbars, smooth scroll (only without reduced motion), `color-scheme: light`, and `lang="es-MX"`.
 
 ## Layout and spacing
 
@@ -74,7 +90,7 @@ Global behaviour already in place: focus-visible lavender ring (2px, offset 2), 
 - Gutters come from `<Container>`: `px-4` → `sm:px-6` → `lg:px-8`.
 - Spacing uses the 4px Tailwind scale. Use `gap-2`/`gap-3` inside controls, `gap-4`/`gap-6` between cards, `gap-8`/`gap-12` between blocks, and `py-16 sm:py-24` between landing sections (via `<Section>`). Card padding is `p-5 sm:p-6`.
 - Mobile-first: design at **360px** first. Primary CTAs should be `fullWidth` on mobile, e.g. `className="w-full sm:w-auto"`. Tap targets are ≥ 44px (`Button` md is 44px).
-- Type scale: hero `text-4xl sm:text-6xl`, section title `text-3xl sm:text-4xl`, card title `text-lg`, body `text-[15px]`/`text-base`, caption `text-[13px]`.
+- Type scale (large on phones): hero `text-[2.35rem] sm:text-5xl lg:text-6xl` bold, section title `text-3xl sm:text-4xl` bold, card title `text-lg`, body `text-[17px]` on marketing / `text-[15px]` in app, caption `text-[13px]`.
 
 ## Components
 
@@ -95,7 +111,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 ```
 
 - Lucide icons inside a button are sized automatically, so do not set `size` on them.
-- Use one `primary` per view region. Use `inverse` (white) as the single hero CTA when a violet button would compete with the aurora.
+- Use one `primary` per view region. `inverse` is a white button with blue text, for use on `night`/primary fills.
 
 ### SubmitButton (`submit-button.tsx`, client)
 
@@ -257,27 +273,38 @@ import { Stagger, StaggerItem } from "@/components/motion/stagger";  // client
 - Timing: hover/press 200ms, reveals 600–700ms with `ease-out-expo` (`[0.16, 1, 0.3, 1]`), stagger 60–80ms, and never more than 6 staggered items.
 - Do **not** wrap whole pages in client components to animate them. Keep pages as server components and wrap only the leaves in `FadeIn` or `Stagger`.
 
+## Landing (home = sales page)
+
+Mobile-first, under 5 screens, in this order: **Hero + plan picker** (`hero.tsx`, `plan-picker.tsx`) → **Cómo funciona** (3 steps) → optional **+44 number** one-liner → **4 FAQs** + WhatsApp → footer (MASMOVIL S.A. de C.V., Guadalajara).
+
+- Picker: 3 plans visible (`VISIBLE_PLAN_IDS` = 5 GB, **20 GB recomendado**, 10 GB), recommended preselected, "Ver más planes" for the rest (`MARKETED_PLAN_IDS` in `plans-data.ts`; 50 GB is not marketed). Price per GB under each plan.
+- Buy button "Comprar ahora — $599 MXN" → server action `startCardCheckout({ planId })` → Stripe (Stripe collects the email; no email step on our page). Guarantee line and payment row right under the button; secondary link "Pagar con SPEI / ya tengo cuenta" → `/app/comprar?plan=…`.
+- Mobile sticky bar (WhatsApp + "Comprar ahora — $X MXN") hides while the in-page button is visible.
+- Funnel events: `plan_select`, `buy_click`, `checkout_redirect`, `buy_error` (+ GA4 `view_item_list`, `select_item`, `begin_checkout`) via `src/components/marketing/funnel.ts`.
+- `/planes` renders the same picker with every plan visible. `/reembolsos` holds the 30-day refund + connection guarantee.
+- JSON-LD: Organization + Product/AggregateOffer (`json-ld.tsx`) and FAQPage (`faq-section.tsx`).
+
 ## Do / Don't
 
 **Do**
-- Keep surfaces almost black with 1px hairlines, so that colour means something.
-- Use `lavender` for interactive and brand text and `accent` (cyan) only as the nova spark.
-- Use `tabular-nums` and `font-display` for every money and data amount. Format with `Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" })`.
+- Keep surfaces white on cool paper with 1px hairlines, so blue and marigold mean something.
+- Use `primary` for the single main action per region, `link` for interactive text, `marigold` only for the recommended badge / step numbers / the nova node.
+- Use `tabular-nums` and `font-display` for every money and data amount. Format with `formatMxn` / `formatPesos` (`src/components/marketing/format.ts`).
+- Put the guarantee and the payment methods right under the buy button.
 - Use `font-mono` and a `CopyButton` for anything the user copies.
 - Use sentence case and short Spanish copy ("Ver planes", not "VER PLANES").
-- Test at 360px and run keyboard-only checks.
+- Test at 360–390px and run keyboard-only checks.
 
 **Don't**
-- Use neon saturated purples, purple-on-purple text, rainbow gradients, or `text-gradient-brand` on full sentences.
-- Glow more than one element per screen or stack glass on glass.
-- Use `subtle` for body text, `primary` as a text colour on dark (use `lavender`), or pure `#000`/`#fff` backgrounds.
+- Use purple, neon, glows or dark heroes on the public site.
+- Sell "sin registro" as a benefit, mention crypto/USDT, or show prices that could read as dollars.
+- Use `subtle` for body text, marigold as a text colour (use `marigold-ink`), or pure `#000` backgrounds.
 - Use raw hex values in components; add a token instead.
-- Use emoji as icons; use `lucide-react` at 16–20px.
+- Use emoji as icons; use `lucide-react` at 16–24px.
 - Override `<body>` font or colour, or add global CSS outside `globals.css`.
 
 ## Notes for agents
 
-- `src/app/page.tsx` is a temporary placeholder (centred `<Logo />`); replace it.
 - No navbar lives in the root layout. Marketing and app route groups bring their own.
 - `metadataBase` comes from `APP_URL`, and the title template is `"%s · NovaPhone"`. Pages export `metadata = { title: "Planes" }`.
 - An OG image is defined at the root and inherited, so add per-route `opengraph-image.tsx` only if needed. The Sora TTFs for `next/og` are in `src/assets/fonts/`.

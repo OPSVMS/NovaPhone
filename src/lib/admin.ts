@@ -5,6 +5,7 @@ import { getBalanceUsd } from "./esimaccess";
 import { cloudnumberingEnabled, getCloudnumberingBalance } from "./cloudnumbering";
 import { novacoreEnabled } from "./novacore";
 import { openpayEnabled } from "./openpay";
+import { paymentsEnabled } from "./payments";
 import { emailEnabled } from "./email";
 import { getFxUsdMxn } from "./queries";
 
@@ -79,6 +80,7 @@ export async function getOverview() {
       cloudnumbering,
       novacore: novacoreEnabled(),
       openpay: openpayEnabled(),
+      stripe: paymentsEnabled(),
       email: emailEnabled(),
     },
   };
@@ -141,9 +143,9 @@ export async function getUserDetail(userId: string) {
     db.query.phoneNumbers.findFirst({ where: and(eq(schema.phoneNumbers.userId, userId), eq(schema.phoneNumbers.status, "assigned")) }),
     db.select({ n: dsql<number>`count(*)::int`, last: dsql<Date | null>`max(created_at)` }).from(schema.sessions).where(and(eq(schema.sessions.userId, userId), gte(schema.sessions.expiresAt, new Date()))),
     db
-      .select({ a: schema.adminAudit, adminEmail: schema.users.email })
+      .select({ a: schema.adminAudit, adminEmail: dsql<string>`coalesce(${schema.users.email}, 'Sistema')` })
       .from(schema.adminAudit)
-      .innerJoin(schema.users, eq(schema.users.id, schema.adminAudit.adminId))
+      .leftJoin(schema.users, eq(schema.users.id, schema.adminAudit.adminId))
       .where(and(eq(schema.adminAudit.targetType, "user"), eq(schema.adminAudit.targetId, userId)))
       .orderBy(desc(schema.adminAudit.createdAt))
       .limit(50),
@@ -181,9 +183,17 @@ export async function listOrders({ status, q = "", limit = 100 }: { status?: str
     conds.push(or(ilike(schema.users.email, like), ilike(schema.orders.iccid, like), ilike(schema.orders.planName, like), ilike(schema.orders.providerOrderNo, like))!);
   }
   return db
-    .select({ order: schema.orders, email: schema.users.email, name: schema.users.name })
+    .select({
+      order: schema.orders,
+      email: schema.users.email,
+      name: schema.users.name,
+      /** Compra directa con tarjeta (Stripe): id del checkout y bandera de reembolso/disputa. */
+      cardCheckoutId: schema.cardCheckouts.id,
+      cardFlag: schema.cardCheckouts.flagReason,
+    })
     .from(schema.orders)
     .innerJoin(schema.users, eq(schema.users.id, schema.orders.userId))
+    .leftJoin(schema.cardCheckouts, eq(schema.cardCheckouts.orderId, schema.orders.id))
     .where(conds.length ? and(...conds) : undefined)
     .orderBy(desc(schema.orders.createdAt))
     .limit(limit);
@@ -248,9 +258,9 @@ export async function getActivity(limit = 60): Promise<ActivityItem[]> {
 
 export async function getAuditLog(limit = 100) {
   const rows = await db
-    .select({ a: schema.adminAudit, adminEmail: schema.users.email })
+    .select({ a: schema.adminAudit, adminEmail: dsql<string>`coalesce(${schema.users.email}, 'Sistema')` })
     .from(schema.adminAudit)
-    .innerJoin(schema.users, eq(schema.users.id, schema.adminAudit.adminId))
+    .leftJoin(schema.users, eq(schema.users.id, schema.adminAudit.adminId))
     .orderBy(desc(schema.adminAudit.createdAt))
     .limit(limit);
   return rows.map((r) => ({ ...r.a, adminEmail: r.adminEmail }));

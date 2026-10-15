@@ -1,6 +1,6 @@
 /**
- * Fórmula pura de la comisión con tarjeta (espejo de `cardFeeCents` en src/lib/openpay.ts, que es server-only).
- * Los parámetros vienen del servidor para respetar la misma configuración (OPENPAY_FEE_PCT, OPENPAY_FEE_FIXED, OPENPAY_PASS_FEES).
+ * Fórmula pura de la comisión con tarjeta (espejo de `cardFeeCents` en src/lib/checkout.ts, que es server-only).
+ * Los parámetros vienen del servidor para respetar la misma configuración (CARD_FEE_PCT, CARD_FEE_FIXED_MXN, CARD_PASS_FEES).
  */
 export type CardFeeConfig = { pct: number; fixedMxn: number; pass: boolean };
 

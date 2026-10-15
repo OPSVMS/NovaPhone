@@ -1,68 +1,83 @@
-import { ArrowRight, RadioTower, RefreshCw, Timer, Wallet } from "lucide-react";
-import { Aurora } from "@/components/motion/aurora";
-import { FadeIn } from "@/components/motion/fade-in";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { BadgeCheck, Check, Lock, QrCode } from "lucide-react";
 import { Container } from "@/components/ui/container";
-import { HeroVisual } from "./hero-visual";
+import { formatMxn } from "./format";
+import { PlanPicker } from "./plan-picker";
+import { RECOMMENDED_PLAN_ID, VISIBLE_PLAN_IDS, type MarketingPlan } from "./plans-data";
 
-const trust = [
-  { icon: RadioTower, label: "Red Telcel 5G" },
-  { icon: Timer, label: "Activa en 2 min" },
-  { icon: RefreshCw, label: "Recargas sin reinstalar" },
-  { icon: Wallet, label: "SPEI / USDT" },
+const chips = [
+  { icon: QrCode, label: "QR en 2 min" },
+  { icon: BadgeCheck, label: "Garantía de conexión" },
+  { icon: Lock, label: "Pago seguro Stripe" },
 ];
 
-export function Hero() {
+/** Desktop-only answers next to the picker (mobile gets them in "Cómo funciona" and the FAQ). */
+const facts = [
+  "Una eSIM es una SIM digital que se instala con un QR, sin chip físico.",
+  "Tu chip actual sigue funcionando para llamadas.",
+  "Funciona en iPhone XS o más nuevo, Galaxy S20 o más nuevo y Pixel 3 o más nuevo.",
+  "Recargas en la misma eSIM cuando se acaben tus datos.",
+];
+
+/**
+ * Hero = buy box. Promise (H1) + proof (subline, chips) + action (picker) in the first screen.
+ * Mobile: copy on top, picker right under it. Desktop: copy left, picker card right.
+ */
+export function Hero({ plans }: { plans: MarketingPlan[] }) {
+  const rec = plans.find((p) => p.id === RECOMMENDED_PLAN_ID);
   return (
-    <section className="relative isolate -mt-[calc(4rem+env(safe-area-inset-top))] overflow-hidden pt-[calc(4rem+env(safe-area-inset-top))]">
-      <Aurora variant="hero" />
-      <Container className="grid items-center gap-12 pb-16 pt-12 sm:pb-24 sm:pt-20 lg:grid-cols-[1.1fr_1fr] lg:gap-8 lg:pb-28 lg:pt-24">
-        <div className="flex flex-col items-start gap-6 sm:gap-7">
-          <FadeIn immediate y={10}>
-            <Badge variant="primary" dot>
-              eSIM de datos para México
-            </Badge>
-          </FadeIn>
-
-          <FadeIn immediate delay={0.06} as="div">
-            <h1 className="max-w-[14ch] text-[2.6rem] font-semibold leading-[1.02] tracking-[-0.035em] sm:text-6xl lg:text-7xl">
-              <span className="text-gradient">Internet 5G en México.</span>{" "}
-              <span className="text-gradient-brand">Sin papeleo.</span>
-            </h1>
-          </FadeIn>
-
-          <FadeIn immediate delay={0.12}>
-            <p className="max-w-[46ch] text-base leading-relaxed text-muted sm:text-lg">
-              Una eSIM de datos sobre la red Telcel 5G. Crea tu cuenta con tu correo, paga con SPEI o USDT y
-              conéctate en minutos. Sin contratos ni plazos forzosos.
-            </p>
-          </FadeIn>
-
-          <FadeIn immediate delay={0.18} className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
-            <Button href="/#planes" size="lg" className="w-full sm:w-auto">
-              Ver planes
-              <ArrowRight className="transition-transform duration-200 ease-out-expo group-hover/button:translate-x-0.5" />
-            </Button>
-            <Button href="/#como-funciona" size="lg" variant="secondary" className="w-full sm:w-auto">
-              Cómo funciona
-            </Button>
-          </FadeIn>
-
-          <FadeIn immediate delay={0.26}>
-            <ul className="flex flex-wrap items-center gap-x-5 gap-y-2 pt-1 text-[13px] text-muted">
-              {trust.map(({ icon: Icon, label }) => (
-                <li key={label} className="inline-flex items-center gap-2">
-                  <Icon aria-hidden className="size-4 text-lavender" />
-                  {label}
-                </li>
-              ))}
-            </ul>
-          </FadeIn>
+    <section id="planes" aria-labelledby="hero-titulo" className="relative isolate scroll-mt-16 overflow-hidden">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[560px] bg-[radial-gradient(60%_60%_at_15%_0%,rgb(31_111_209/0.13),transparent_70%),radial-gradient(40%_50%_at_95%_10%,rgb(255_163_26/0.12),transparent_70%)]"
+      />
+      <Container className="grid gap-7 pb-12 pt-4 sm:pt-12 lg:grid-cols-[1fr_440px] lg:items-start lg:gap-14 lg:pb-20 lg:pt-16 xl:grid-cols-[1fr_460px]">
+        <div className="flex flex-col gap-3.5 sm:gap-5 lg:pt-6">
+          <p className="inline-flex w-fit items-center gap-2 rounded-full border border-primary/15 bg-surface px-3 py-1 text-[13px] font-semibold text-primary shadow-card">
+            <span aria-hidden className="size-2 rounded-full bg-marigold" />
+            eSIM de datos para México
+          </p>
+          <h1
+            id="hero-titulo"
+            className="text-[2.15rem] font-bold leading-[1.06] tracking-[-0.03em] text-fg sm:max-w-[16ch] sm:text-5xl lg:text-6xl"
+          >
+            Internet para tu celular en <span className="whitespace-nowrap text-primary">2&nbsp;minutos</span>.
+          </h1>
+          <p className="max-w-[44ch] text-[17px] leading-snug text-muted sm:text-lg sm:leading-relaxed">
+            Sin contrato ni trámites.
+            {rec ? (
+              <>
+                {" "}
+                <strong className="font-semibold text-fg tabular-nums">
+                  {rec.dataGb} GB por {formatMxn(rec.priceMxn)}
+                </strong>
+                .
+              </>
+            ) : null}
+          </p>
+          <p className="text-[15px] font-medium leading-snug text-fg">Red Telcel 5G · paga con tarjeta o SPEI · QR al instante</p>
+          <ul className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap" data-testid="trust-chips">
+            {chips.map(({ icon: Icon, label }) => (
+              <li
+                key={label}
+                className="flex flex-col items-center gap-1 rounded-2xl border border-border bg-surface px-1.5 py-2 text-center text-[12px] font-semibold leading-tight text-fg shadow-card sm:h-9 sm:flex-row sm:gap-1.5 sm:rounded-full sm:px-3 sm:py-0 sm:text-[13px]"
+              >
+                <Icon aria-hidden className="size-4 shrink-0 text-success" />
+                {label}
+              </li>
+            ))}
+          </ul>
+          <ul className="mt-3 hidden flex-col gap-2.5 border-t border-border pt-5 text-[15px] text-muted lg:flex">
+            {facts.map((f) => (
+              <li key={f} className="flex items-start gap-2.5">
+                <Check aria-hidden className="mt-0.5 size-[18px] shrink-0 text-primary" strokeWidth={2.5} />
+                {f}
+              </li>
+            ))}
+          </ul>
         </div>
 
-        <div className="relative">
-          <HeroVisual />
+        <div className="rounded-panel border border-border bg-surface p-4 shadow-raised sm:p-6">
+          <PlanPicker plans={plans} visibleIds={VISIBLE_PLAN_IDS} recommendedId={RECOMMENDED_PLAN_ID} />
         </div>
       </Container>
     </section>

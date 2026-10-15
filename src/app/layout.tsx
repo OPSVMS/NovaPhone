@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Sora } from "next/font/google";
 import { MotionProvider } from "@/components/motion/motion-provider";
+import { Analytics } from "@/components/analytics";
 import "./globals.css";
 
 const geist = Geist({
@@ -33,13 +34,13 @@ function metadataBase(): URL {
 export const metadata: Metadata = {
   metadataBase: metadataBase(),
   title: {
-    default: "NovaPhone — eSIM de datos en México",
+    default: "NovaPhone — eSIM de datos para México en red Telcel 5G",
     template: "%s · NovaPhone",
   },
   description:
-    "eSIM de datos para México sobre la red Telcel 5G. Activa en minutos, sin chip físico ni contratos. Recarga con SPEI o USDT.",
+    "eSIM de datos para México en red Telcel 5G. Actívala en 2 minutos con un QR, sin contrato. Paga con tarjeta o SPEI.",
   applicationName: "NovaPhone",
-  keywords: ["eSIM", "eSIM México", "datos móviles", "Telcel 5G", "eSIM de datos", "NovaPhone"],
+  keywords: ["eSIM México", "eSIM Telcel", "chip virtual", "eSIM de datos", "internet para celular sin contrato", "NovaPhone"],
   openGraph: {
     type: "website",
     locale: "es_MX",
@@ -54,8 +55,8 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#07050d",
-  colorScheme: "dark",
+  themeColor: "#f5f7fb",
+  colorScheme: "light",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
@@ -69,6 +70,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full bg-bg font-sans text-fg antialiased">
         <MotionProvider>{children}</MotionProvider>
+        <Analytics />
       </body>
     </html>
   );

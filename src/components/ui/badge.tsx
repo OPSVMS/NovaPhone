@@ -4,8 +4,8 @@ import type { ComponentProps } from "react";
 export type BadgeVariant = "neutral" | "primary" | "accent" | "success" | "warning" | "danger";
 
 const badgeVariants: Record<BadgeVariant, string> = {
-  neutral: "border-border bg-white/[0.04] text-muted",
-  primary: "border-lavender/25 bg-primary/12 text-lavender-soft",
+  neutral: "border-border bg-surface-2 text-muted",
+  primary: "border-primary/20 bg-primary/[0.07] text-primary",
   accent: "border-accent/25 bg-accent/10 text-accent",
   success: "border-success/25 bg-success/10 text-success",
   warning: "border-warning/25 bg-warning/10 text-warning",

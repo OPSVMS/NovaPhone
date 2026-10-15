@@ -25,7 +25,6 @@ const emails: Record<string, ReturnType<typeof t.welcome>> = {
   "03-esim-ready": t.esimReady({ planName: "México 10 GB · 30 días", activationCode: lpa, orderUrl: `https://novaphone.lat/app/esims/${orderId}`, qrSrc: qr }),
   "04-deposit-credited": t.depositCredited("$500.00 MXN"),
   "05-deposit-requested-spei": t.depositRequested({ method: "spei", amount: "$500.00 MXN", reference: "NP4F7K2Q", depositUrl: "https://novaphone.lat/app/fondos", clabe: "646180157000000004", bank: "STP", beneficiary: "NovaPhone SA de CV" }),
-  "06-deposit-requested-usdt": t.depositRequested({ method: "usdt", amount: "$500.00 MXN", reference: "NP9X1M3D", depositUrl: "https://novaphone.lat/app/fondos", usdtAmount: "27.84", usdtAddress: "TQ5nVb1p8kq3sN7yW9xR2mHc4fJ6dL8aZe", usdtNetwork: "TRON (TRC-20)" }),
   "07-deposit-requested-card": t.depositRequested({ method: "card", amount: "$300.00 MXN", reference: "NP2B8C4E", depositUrl: "https://novaphone.lat/app/fondos" }),
   "08-personal-clabe": t.personalClabeReady({ clabe: "646180157012345678", beneficiary: "Ana López", url: "https://novaphone.lat/app/fondos" }),
   "09-topup-applied": t.topupApplied({ planName: "México 10 GB · 30 días", topupName: "+5 GB · 15 días", amount: "$149.00 MXN", orderId }),

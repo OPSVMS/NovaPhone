@@ -75,7 +75,7 @@ export function welcome(name: string): Email {
       ),
       steps(
         [
-          { title: "Agrega saldo", body: "Deposita por SPEI, USDT o tarjeta. Tu saldo queda listo para compras y recargas." },
+          { title: "Agrega saldo", body: "Deposita por SPEI o con tarjeta. Tu saldo queda listo para compras y recargas." },
           { title: "Compra tu plan", body: "Elige los GB y días que necesitas. Puedes recargar la misma eSIM cuando quieras." },
           { title: "Instala tu eSIM", body: "Te mandamos el QR por correo. En iPhone se instala con un solo toque." },
         ],
@@ -128,10 +128,19 @@ export function passwordChanged(when = new Date()): Email {
 
 // ─── eSIM ────────────────────────────────────────────────────────────────────
 
-export function esimReady(o: { planName: string; activationCode: string; orderUrl: string; qrSrc: string }): Email {
+export function esimReady(o: {
+  planName: string;
+  activationCode: string;
+  orderUrl: string;
+  qrSrc: string;
+  orderId?: string;
+  /** Compra sin cuenta: liga para crear la contraseña con un código al correo (y entrar a la cuenta). */
+  accountUrl?: string;
+}): Email {
   const { smdp, matching } = parseLpa(o.activationCode);
   const apple = `https://esimsetup.apple.com/esim_qrcode_provisioning?carddata=${o.activationCode}`;
-  const orderId = o.orderUrl.split("/").filter(Boolean).pop() ?? "";
+  const android = `https://esimsetup.android.com/esim_qrcode_provisioning?carddata=${encodeURIComponent(o.activationCode)}`;
+  const orderId = o.orderId ?? o.orderUrl.split("?")[0].split("/").filter(Boolean).pop() ?? "";
   return layout({
     subject: `Tu eSIM ${o.planName} está lista`,
     preheader: "Escanea el QR o instálala con un toque en iPhone. Tarda menos de 2 minutos.",
@@ -142,7 +151,10 @@ export function esimReady(o: { planName: string; activationCode: string; orderUr
       p(rich`Tu plan ${strong(o.planName)} ya está activo. Escanea este código con la cámara desde ${strong("otro dispositivo")}, o si estás en tu iPhone, instálala con un toque.`),
       image(o.qrSrc, { alt: "Código QR de tu eSIM", width: 200, height: 200, caption: "Escanéalo desde Ajustes › Datos móviles › Agregar eSIM" }),
       button("Instalar en iPhone", apple),
-      links([{ label: "Ver mi eSIM", href: o.orderUrl }]),
+      links([
+        { label: "Instalar en Android", href: android },
+        { label: "Ver mi eSIM", href: o.orderUrl },
+      ]),
       steps(
         [
           { title: "Instala la eSIM", body: "iPhone: toca el botón de arriba o escanea el QR. Android: Ajustes › Conexiones › Administrador de SIM › Agregar eSIM." },
@@ -168,6 +180,13 @@ export function esimReady(o: { planName: string; activationCode: string; orderUr
         "Resumen de compra",
       ),
       callout("warning", "Instálala en el celular donde la vas a usar. No la borres después de instalarla: una eSIM solo puede instalarse una vez.", "Importante"),
+      o.accountUrl
+        ? callout(
+            "info",
+            rich`Creamos tu cuenta NovaPhone con este correo para que veas tu consumo y recargues la misma eSIM. Para entrar, ${link("crea tu contraseña aquí", o.accountUrl)}: te mandamos un código a este correo.`,
+            "Tu cuenta",
+          )
+        : null,
     ],
     reason: "Recibes este correo porque compraste una eSIM en NovaPhone.",
   });
@@ -287,18 +306,15 @@ export function depositCredited(amount: string): Email {
 }
 
 export function depositRequested(o: {
-  method: "spei" | "usdt" | "card";
+  method: "spei" | "card";
   amount: string;
   reference: string;
   depositUrl: string;
   clabe?: string;
   bank?: string;
   beneficiary?: string;
-  usdtAmount?: string;
-  usdtAddress?: string;
-  usdtNetwork?: string;
 }): Email {
-  const methodName = { spei: "Transferencia SPEI", usdt: "USDT", card: "Tarjeta" }[o.method];
+  const methodName = { spei: "Transferencia SPEI", card: "Tarjeta" }[o.method];
   const common = { eyebrow: "Instrucciones de pago", reason: "Recibes este correo porque iniciaste un depósito en NovaPhone." };
 
   if (o.method === "spei") {
@@ -318,28 +334,6 @@ export function depositRequested(o: {
           { label: "Método", value: methodName },
         ]),
         callout("warning", "Incluye la referencia en el concepto para que identifiquemos tu pago al instante. Sin ella, el depósito puede tardar en acreditarse."),
-        button("Ver mi depósito", o.depositUrl),
-      ],
-    });
-  }
-
-  if (o.method === "usdt") {
-    const network = o.usdtNetwork ?? "la red indicada";
-    return layout({
-      ...common,
-      subject: `Instrucciones para tu depósito de ${o.amount} en USDT`,
-      preheader: `Envía ${o.usdtAmount ?? "el monto exacto"} USDT por ${network}.`,
-      title: `Envía ${o.usdtAmount ? `${o.usdtAmount} USDT` : "tu pago en USDT"}`,
-      blocks: [
-        p(rich`Envía ${strong(o.usdtAmount ? `exactamente ${o.usdtAmount} USDT` : "el monto exacto en USDT")} a esta dirección. Acreditaremos ${strong(o.amount)} a tu saldo cuando la red confirme la transacción.`),
-        o.usdtAddress ? copyable(`Dirección USDT${o.usdtNetwork ? ` · ${o.usdtNetwork}` : ""}`, o.usdtAddress) : null,
-        info([
-          o.usdtAmount ? { label: "Envía", value: `${o.usdtAmount} USDT`, strong: true } : null,
-          { label: "Recibes en saldo", value: o.amount },
-          o.usdtNetwork ? { label: "Red", value: o.usdtNetwork } : null,
-          { label: "Referencia", value: mono(o.reference) },
-        ]),
-        callout("danger", rich`Envía solo ${strong("USDT")} por la red ${strong(network)}. Si usas otra red o moneda, los fondos se pierden y no podemos recuperarlos.`, "Revisa la red"),
         button("Ver mi depósito", o.depositUrl),
       ],
     });

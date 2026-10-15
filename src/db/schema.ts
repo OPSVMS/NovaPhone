@@ -190,7 +190,8 @@ export const callLogs = pgTable("call_logs", {
 /** Bitácora de acciones de administradores. */
 export const adminAudit = pgTable("admin_audit", {
   id: uuid("id").primaryKey().defaultRandom(),
-  adminId: uuid("admin_id").notNull().references(() => users.id),
+  /** null = acción del sistema (p. ej. reembolso o disputa avisada por Stripe). */
+  adminId: uuid("admin_id").references(() => users.id),
   action: text("action").notNull(),
   targetType: text("target_type").notNull(),
   targetId: text("target_id"),
@@ -205,6 +206,73 @@ export const webhookEvents = pgTable("webhook_events", {
   payload: jsonb("payload"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * Compra directa con tarjeta (Stripe Checkout) sin cuenta previa: la orden pendiente de pago.
+ * `id` es también el id de la orden (`orders.id`) que se crea al confirmarse el pago, así la URL de éxito
+ * `/compra/{id}?t={accessToken}` y la de la cuenta `/app/esims/{id}` apuntan a lo mismo.
+ * Ciclo: pending → processing → paid → fulfilled | failed | refunded; pending → expired.
+ */
+export const cardCheckouts = pgTable("card_checkouts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  /** Se llena con el correo que captura Stripe (busca o crea la cuenta) o con la sesión, si la había. */
+  userId: uuid("user_id").references(() => users.id),
+  planId: text("plan_id").notNull().references(() => plans.id),
+  planName: text("plan_name").notNull(),
+  /** Precio de lista al iniciar el checkout (centavos MXN). */
+  priceCents: integer("price_cents").notNull(),
+  costUsd: numeric("cost_usd", { mode: "number" }).notNull(),
+  accessToken: text("access_token").notNull(),
+  status: text("status")
+    .$type<"pending" | "processing" | "paid" | "fulfilled" | "failed" | "expired" | "refunded">()
+    .notNull()
+    .default("pending"),
+  provider: text("provider").notNull().default("stripe"),
+  /** Id de la sesión de Checkout (cs_…). */
+  paymentRef: text("payment_ref"),
+  paymentIntentId: text("payment_intent_id"),
+  email: text("email"),
+  /** Lo realmente cobrado (con descuentos) en centavos de `currency`. */
+  amountPaidCents: integer("amount_paid_cents"),
+  currency: text("currency"),
+  promotionCode: text("promotion_code"),
+  discountCents: integer("discount_cents"),
+  receiptUrl: text("receipt_url"),
+  orderId: uuid("order_id").references(() => orders.id),
+  depositId: uuid("deposit_id").references(() => deposits.id),
+  /** gclid / utm_* / landing / referrer / gaClientId del visitante al iniciar el checkout. */
+  attribution: jsonb("attribution").$type<Record<string, unknown>>(),
+  /** Reembolso o disputa avisados por Stripe. */
+  flaggedAt: timestamp("flagged_at", { withTimezone: true }),
+  flagReason: text("flag_reason"),
+  refundedCents: integer("refunded_cents").notNull().default(0),
+  error: text("error"),
+  paidAt: timestamp("paid_at", { withTimezone: true }),
+  fulfilledAt: timestamp("fulfilled_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("card_checkouts_payment_ref_idx").on(t.paymentRef),
+  index("card_checkouts_pi_idx").on(t.paymentIntentId),
+  index("card_checkouts_user_idx").on(t.userId),
+  index("card_checkouts_created_idx").on(t.createdAt),
+]);
+
+/** Embudo propio y anónimo (sin correo, IP ni id de orden). Ver src/lib/analytics/funnel.ts. */
+export const funnelEvents = pgTable("funnel_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ts: timestamp("ts", { withTimezone: true }).notNull().defaultNow(),
+  event: text("event").notNull(),
+  path: text("path"),
+  device: text("device").$type<"mobile" | "desktop">(),
+  country: text("country"),
+  /** La visita vino de un anuncio (gclid/gbraid/wbraid o utm_medium=cpc en `np_attr`). */
+  ads: boolean("ads").notNull().default(false),
+  campaign: text("campaign"),
+  term: text("term"),
+  visitor: text("visitor"),
+  props: jsonb("props").$type<Record<string, string | number | boolean | null>>(),
+}, (t) => [index("funnel_events_ts_idx").on(t.ts), index("funnel_events_visitor_idx").on(t.visitor, t.ts)]);
 
 export const settings = pgTable("settings", {
   key: text("key").primaryKey(),
@@ -221,3 +289,5 @@ export type PhoneNumber = typeof phoneNumbers.$inferSelect;
 export type SmsMessage = typeof smsMessages.$inferSelect;
 export type CallLog = typeof callLogs.$inferSelect;
 export type AdminAudit = typeof adminAudit.$inferSelect;
+export type CardCheckout = typeof cardCheckouts.$inferSelect;
+export type FunnelEvent = typeof funnelEvents.$inferSelect;

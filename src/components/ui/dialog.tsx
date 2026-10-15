@@ -56,7 +56,7 @@ export function Dialog({
         "m-0 mt-auto w-full max-w-none rounded-t-panel border border-border bg-surface p-0 text-fg shadow-card",
         "sm:m-auto sm:rounded-panel",
         widths[size],
-        "backdrop:bg-black/60 backdrop:backdrop-blur-sm",
+        "backdrop:bg-[rgb(11_27_51/0.45)] backdrop:backdrop-blur-sm",
         "opacity-0 translate-y-6 transition-[opacity,translate,display,overlay] transition-discrete duration-300 ease-out-expo",
         "open:opacity-100 open:translate-y-0 starting:open:opacity-0 starting:open:translate-y-6",
         "motion-reduce:translate-y-0 motion-reduce:transition-none",
@@ -79,7 +79,7 @@ export function Dialog({
             type="button"
             onClick={() => onOpenChange(false)}
             aria-label="Cerrar"
-            className="-mr-1.5 -mt-1 inline-flex size-9 shrink-0 items-center justify-center rounded-[10px] text-muted transition-colors hover:bg-white/5 hover:text-fg"
+            className="-mr-1.5 -mt-1 inline-flex size-9 shrink-0 items-center justify-center rounded-[10px] text-muted transition-colors hover:bg-hover hover:text-fg"
           >
             <X className="size-[18px]" aria-hidden />
           </button>

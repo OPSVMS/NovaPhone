@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { randomUUID } from "node:crypto";
-import { register, requestDeposit, signedDeposit } from "./helpers";
+import { register, pendingSpeiDeposit, emailOf, signedDeposit } from "./helpers";
 
 test.describe("API y webhooks", () => {
   test("cron exige token", async ({ request }) => {
@@ -17,11 +17,11 @@ test.describe("API y webhooks", () => {
     expect(missing.status()).toBe(404);
 
     await register(page);
-    const { usdt } = await requestDeposit(page, 150, "usdt");
-    const externalId = `0x${randomUUID()}`;
-    const first = await signedDeposit(request, { method: "usdt", amountUsdt: usdt, externalId });
+    const { reference } = await pendingSpeiDeposit(emailOf(page), 150);
+    const externalId = `SPEI-${randomUUID()}`;
+    const first = await signedDeposit(request, { method: "spei", reference, amountMxn: 150, externalId });
     expect((await first.json()).credited).toBe(true);
-    const again = await signedDeposit(request, { method: "usdt", amountUsdt: usdt, externalId });
+    const again = await signedDeposit(request, { method: "spei", reference, amountMxn: 150, externalId });
     expect((await again.json()).duplicate).toBe(true);
     await page.goto("/app");
     await expect(page.getByText("$150").filter({ visible: true }).first()).toBeVisible();

@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { register, requestDeposit, buyPlan, scrollThrough, fundAccount, clabeOf, speiToClabe } from "./helpers";
+import { register, buyPlan, scrollThrough, fundAccount, clabeOf, speiToClabe, pendingSpeiDeposit, emailOf, signedDeposit } from "./helpers";
 
 test.describe("Flujo completo de compra", () => {
   test("SPEI a CLABE personal → acreditación → compra 20 GB → eSIM lista con QR → movimientos", async ({ page }) => {
@@ -64,14 +64,19 @@ test.describe("Flujo completo de compra", () => {
     await expect(page.getByText("$200").filter({ visible: true }).first()).toBeVisible();
   });
 
-  test("depósito USDT: monto único y acreditación por webhook", async ({ page, request }) => {
+  test("depósito SPEI con referencia: instrucciones y acreditación por webhook (sin USDT)", async ({ page, request }) => {
     await register(page);
-    const { usdt } = await requestDeposit(page, 500, "usdt");
-    expect(usdt).toMatch(/^\d+\.\d{4}$/);
-    await expect(page.getByText("TTestAddressNovaPhone000000000000")).toBeVisible();
-    const { signedDeposit } = await import("./helpers");
-    const res = await signedDeposit(request, { method: "usdt", amountUsdt: usdt, externalId: `0xtx${Date.now()}${Math.random()}` });
-    expect(res.status()).toBe(200);
+    const { id, reference } = await pendingSpeiDeposit(emailOf(page), 500);
+    await page.goto(`/app/fondos/${id}`);
+    await expect(page.getByText("Transfiere por SPEI")).toBeVisible();
+    await expect(page.getByText(reference).first()).toBeVisible();
+    // USDT ya no se ofrece ni se acepta.
+    await page.goto("/app/fondos");
+    await expect(page.getByRole("radio", { name: /USDT/ })).toHaveCount(0);
+    const usdt = await signedDeposit(request, { method: "usdt", amountUsdt: "27.0000", externalId: `0xtx${Date.now()}` });
+    expect(usdt.status()).toBe(400);
+    const res = await signedDeposit(request, { method: "spei", reference, amountMxn: 500, externalId: `SPEI-${Date.now()}${Math.random()}` });
+    expect((await res.json()).credited).toBe(true);
     await page.goto("/app");
     await expect(page.getByText("$500").filter({ visible: true }).first()).toBeVisible();
   });

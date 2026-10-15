@@ -38,7 +38,7 @@ export default async function DashboardPage() {
   const isNew = orders.length === 0;
 
   const steps = [
-    { title: "Agrega saldo", desc: "Con SPEI o USDT, desde $100.", done: hasBalance || ledger.length > 0, href: "/app/fondos" },
+    { title: "Agrega saldo", desc: "Con SPEI o tarjeta, desde $100.", done: hasBalance || ledger.length > 0, href: "/app/fondos" },
     { title: "Compra tu primer plan", desc: "Elige cuántos GB necesitas.", done: !isNew, href: "/app/comprar" },
     { title: "Instala tu eSIM", desc: "Escanea el QR y listo.", done: false, href: "/app/esims" },
   ];

@@ -39,6 +39,15 @@ const meta = (d: Deposit, k: string) => (typeof d.meta?.[k] === "string" ? (d.me
 
 function SourceBadge({ d }: { d: Deposit }) {
   const src = meta(d, "source");
+  const flag = meta(d, "flagReason");
+  if (meta(d, "provider") === "stripe") {
+    return (
+      <span className="inline-flex flex-wrap gap-1">
+        <Badge variant="primary">{meta(d, "kind") === "esim" ? "Stripe · compra eSIM" : "Stripe · saldo"}</Badge>
+        {flag ? <Badge variant="danger">{flag.startsWith("dispute") ? "Disputa" : "Reembolso"}</Badge> : null}
+      </span>
+    );
+  }
   if (src === "webhook") return <Badge variant="neutral">Webhook</Badge>;
   if (src === "reconcile") return <Badge variant="primary">Conciliación</Badge>;
   if (d.meta?.approvedManually) return <Badge variant="warning">Aprobado a mano</Badge>;

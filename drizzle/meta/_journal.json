@@ -57,6 +57,13 @@
       "when": 1791757331854,
       "tag": "0007_call_dtmf",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792100384961,
+      "tag": "0008_card_checkout_funnel",
+      "breakpoints": true
     }
   ]
 }

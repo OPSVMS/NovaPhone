@@ -93,7 +93,7 @@ export function MobileMenu({ links }: { links: NavLink[] }) {
                 <div className="fixed inset-x-0 bottom-0 top-[calc(4rem+env(safe-area-inset-top))] z-40 md:hidden">
                   <motion.div
                     aria-hidden
-                    className="absolute inset-0 bg-bg/80 backdrop-blur-md"
+                    className="absolute inset-0 bg-[rgb(11_27_51/0.35)] backdrop-blur-sm"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
@@ -106,7 +106,7 @@ export function MobileMenu({ links }: { links: NavLink[] }) {
                     role="dialog"
                     aria-modal="true"
                     aria-label="Menú"
-                    className="relative mx-3 mt-2 overflow-hidden rounded-panel border border-border bg-surface/95 p-3 shadow-card"
+                    className="relative mx-3 mt-2 overflow-hidden rounded-panel border border-border bg-surface p-3 shadow-raised"
                     initial={{ opacity: 0, y: -12, scale: 0.98 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -8, scale: 0.98 }}
@@ -124,7 +124,7 @@ export function MobileMenu({ links }: { links: NavLink[] }) {
                             <Link
                               href={link.href}
                               onClick={close}
-                              className="flex h-12 items-center justify-between rounded-control px-3 text-base font-medium text-fg transition-colors duration-200 hover:bg-white/[0.04]"
+                              className="flex h-12 items-center justify-between rounded-control px-3 text-base font-medium text-fg transition-colors duration-200 hover:bg-hover"
                             >
                               {link.label}
                               <ArrowRight aria-hidden className="size-4 text-subtle" />
@@ -138,8 +138,8 @@ export function MobileMenu({ links }: { links: NavLink[] }) {
                       <Button href={AUTH_LINKS.login} variant="secondary" onClick={close}>
                         Entrar
                       </Button>
-                      <Button href={AUTH_LINKS.signup} onClick={close}>
-                        Crear cuenta
+                      <Button href="/#planes" onClick={close}>
+                        Comprar eSIM
                       </Button>
                     </div>
                   </motion.div>

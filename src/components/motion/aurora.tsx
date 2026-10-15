@@ -31,32 +31,32 @@ export function Aurora({ className, variant = "hero", grid, noise = true }: Auro
         <>
           <div
             className={clsx(blob, "animate-aurora-a left-[-20%] top-[-35%] h-[80%] w-[90%]")}
-            style={{ background: "radial-gradient(closest-side, rgb(118 82 240 / 0.45), transparent)" }}
+            style={{ background: "radial-gradient(closest-side, rgb(31 111 209 / 0.16), transparent)" }}
           />
           <div
             className={clsx(blob, "animate-aurora-b right-[-25%] top-[-20%] h-[70%] w-[80%]")}
-            style={{ background: "radial-gradient(closest-side, rgb(167 139 250 / 0.28), transparent)" }}
+            style={{ background: "radial-gradient(closest-side, rgb(255 163 26 / 0.12), transparent)" }}
           />
           <div
             className={clsx(blob, "animate-aurora-c left-[20%] top-[10%] h-[55%] w-[60%]")}
-            style={{ background: "radial-gradient(closest-side, rgb(125 227 244 / 0.12), transparent)" }}
+            style={{ background: "radial-gradient(closest-side, rgb(11 127 114 / 0.06), transparent)" }}
           />
         </>
       ) : variant === "subtle" ? (
         <>
           <div
             className={clsx(blob, "animate-aurora-a left-[-15%] top-[-40%] h-[70%] w-[70%]")}
-            style={{ background: "radial-gradient(closest-side, rgb(118 82 240 / 0.22), transparent)" }}
+            style={{ background: "radial-gradient(closest-side, rgb(31 111 209 / 0.1), transparent)" }}
           />
           <div
             className={clsx(blob, "animate-aurora-b right-[-20%] top-[-30%] h-[60%] w-[60%]")}
-            style={{ background: "radial-gradient(closest-side, rgb(125 227 244 / 0.07), transparent)" }}
+            style={{ background: "radial-gradient(closest-side, rgb(255 163 26 / 0.07), transparent)" }}
           />
         </>
       ) : (
         <div
           className={clsx(blob, "animate-aurora-c left-1/2 top-1/2 h-[120%] w-[120%] -translate-x-1/2 -translate-y-1/2")}
-          style={{ background: "radial-gradient(closest-side, rgb(118 82 240 / 0.35), transparent 70%)" }}
+          style={{ background: "radial-gradient(closest-side, rgb(31 111 209 / 0.14), transparent 70%)" }}
         />
       )}
       {showGrid ? <div className="bg-grid mask-fade-radial absolute inset-0 opacity-70" /> : null}

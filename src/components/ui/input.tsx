@@ -4,7 +4,7 @@ import type { ComponentProps, ReactNode } from "react";
 /** Shared control styles (input, textarea, select). Invalid state via aria-invalid. */
 export const controlClass =
   "w-full rounded-control border border-border bg-surface-2/70 text-[15px] text-fg placeholder:text-subtle " +
-  "shadow-[inset_0_1px_0_0_rgb(255_255_255/0.03)] transition-[border-color,box-shadow,background-color] duration-200 " +
+  "shadow-[inset_0_1px_2px_0_rgb(11_27_51/0.04)] transition-[border-color,box-shadow,background-color] duration-200 " +
   "hover:border-border-strong focus:border-lavender/60 focus:bg-surface-2 focus:outline-none focus:ring-4 focus:ring-primary/20 " +
   "focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 " +
   "aria-invalid:border-danger/60 aria-invalid:focus:ring-danger/20 " +

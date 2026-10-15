@@ -1,39 +1,41 @@
 import type { Metadata } from "next";
-import { AlwaysConnected } from "@/components/marketing/always-connected";
-import { Compatibility } from "@/components/marketing/compatibility";
-import { CtaBand } from "@/components/marketing/cta-band";
 import { FaqSection } from "@/components/marketing/faq-section";
 import { Hero } from "@/components/marketing/hero";
 import { HowItWorks } from "@/components/marketing/how-it-works";
-import { NumberSection } from "@/components/marketing/number-section";
-import { getMarketingPlans, pickHighlights } from "@/components/marketing/plans-data";
-import { PlansSection } from "@/components/marketing/plans-section";
-import { ValueProps } from "@/components/marketing/value-props";
+import { LandingJsonLd } from "@/components/marketing/json-ld";
+import { NumberAddon } from "@/components/marketing/number-section";
+import { formatMxn } from "@/components/marketing/format";
+import { RECOMMENDED_PLAN_ID, getMarketingPlans } from "@/components/marketing/plans-data";
 import { NUMBER_PRICE_MXN } from "@/lib/numbers";
 
 export const revalidate = 3600;
 
-export const metadata: Metadata = {
-  title: { absolute: "NovaPhone — Internet 5G en México. Sin papeleo." },
-  description:
-    "eSIM de datos para México sobre la red Telcel 5G. Sin CURP ni documentos, sin contratos. Activa en 2 minutos y paga con SPEI o USDT.",
-  alternates: { canonical: "/" },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const plans = await getMarketingPlans();
+  const rec = plans.find((p) => p.id === RECOMMENDED_PLAN_ID);
+  const min = Math.min(...plans.map((p) => p.priceMxn));
+  const offer = rec ? ` ${rec.dataGb} GB por ${formatMxn(rec.priceMxn)}.` : "";
+  return {
+    title: { absolute: `eSIM México de datos en red Telcel 5G · desde ${formatMxn(min)} | NovaPhone` },
+    description: `eSIM de datos para México en red Telcel 5G. Actívala en 2 minutos con un QR, sin contrato ni trámites.${offer} Paga con tarjeta o SPEI.`,
+    alternates: { canonical: "/" },
+    openGraph: {
+      title: "eSIM de datos para México · NovaPhone",
+      description: `Internet para tu celular en 2 minutos. Red Telcel 5G, sin contrato.${offer}`,
+      url: "/",
+    },
+  };
+}
 
 export default async function HomePage() {
   const plans = await getMarketingPlans();
   return (
     <>
-      <Hero />
-      <div className="hairline mx-auto max-w-6xl" />
-      <ValueProps />
-      <PlansSection plans={pickHighlights(plans)} total={plans.length} />
-      <AlwaysConnected />
-      <NumberSection priceMxn={NUMBER_PRICE_MXN()} />
+      <Hero plans={plans} />
       <HowItWorks />
-      <Compatibility />
+      <NumberAddon priceMxn={NUMBER_PRICE_MXN()} />
       <FaqSection />
-      <CtaBand />
+      <LandingJsonLd plans={plans} baseUrl={process.env.APP_URL || undefined} />
     </>
   );
 }

@@ -97,7 +97,7 @@ export default async function AdminEsimsPage({ searchParams }: PageProps<"/admin
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {rows.map(({ order: o, email, name }) => {
+                {rows.map(({ order: o, email, name, cardCheckoutId, cardFlag }) => {
                   const stuck = isStuck(o);
                   const days = daysLeft(o.expiresAt, now);
                   return (
@@ -132,6 +132,12 @@ export default async function AdminEsimsPage({ searchParams }: PageProps<"/admin
                       <td className={`${td} whitespace-nowrap text-muted`}>{formatDateTime(o.createdAt)}</td>
                       <td className={`${td} text-right`}>
                         <span className={money}>{formatMxn(o.priceCents)}</span>
+                        {cardCheckoutId ? (
+                          <span className="mt-1 flex justify-end gap-1">
+                            <Badge variant="primary">Tarjeta</Badge>
+                            {cardFlag ? <Badge variant="danger">{cardFlag.startsWith("dispute") ? "Disputa" : "Reembolso"}</Badge> : null}
+                          </span>
+                        ) : null}
                       </td>
                     </tr>
                   );
@@ -141,7 +147,7 @@ export default async function AdminEsimsPage({ searchParams }: PageProps<"/admin
           </div>
 
           <ul className="divide-y divide-border lg:hidden">
-            {rows.map(({ order: o, email }) => {
+            {rows.map(({ order: o, email, cardCheckoutId }) => {
               const stuck = isStuck(o);
               return (
                 <li key={o.id} className={clsx("relative flex flex-col gap-2.5 p-4", stuck && "bg-warning/[0.06]")}>
@@ -150,7 +156,10 @@ export default async function AdminEsimsPage({ searchParams }: PageProps<"/admin
                       <span className="truncate font-medium text-fg">{o.planName}</span>
                       <UserLink id={o.userId} email={email} stretched />
                     </div>
-                    <span className={`${money} shrink-0`}>{formatMxn(o.priceCents)}</span>
+                    <span className="flex shrink-0 flex-col items-end gap-1">
+                      <span className={money}>{formatMxn(o.priceCents)}</span>
+                      {cardCheckoutId ? <Badge variant="primary">Tarjeta</Badge> : null}
+                    </span>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     <OrderStatusBadge status={o.status} expired={isExpired(o)} suspended={o.suspended} />

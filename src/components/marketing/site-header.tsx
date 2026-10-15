@@ -11,7 +11,7 @@ export function SiteHeader() {
     <HeaderShell>
       <Container className="flex h-16 items-center justify-between gap-6">
         <Link href="/" aria-label="NovaPhone – inicio" className="-m-1 rounded-lg p-1">
-          <Logo size={22} title={null} />
+          <Logo size={24} title={null} />
         </Link>
 
         <nav aria-label="Principal" className="hidden md:block">
@@ -20,7 +20,7 @@ export function SiteHeader() {
               <li key={link.href}>
                 <Link
                   href={link.href}
-                  className="inline-flex h-9 items-center rounded-[10px] px-3 text-sm text-muted transition-colors duration-200 ease-out-expo hover:bg-white/[0.04] hover:text-fg"
+                  className="inline-flex h-9 items-center rounded-[10px] px-3 text-[15px] font-medium text-muted transition-colors duration-200 ease-out-expo hover:bg-hover hover:text-fg"
                 >
                   {link.label}
                 </Link>
@@ -33,8 +33,8 @@ export function SiteHeader() {
           <Button href={AUTH_LINKS.login} variant="ghost" size="sm">
             Entrar
           </Button>
-          <Button href={AUTH_LINKS.signup} size="sm">
-            Crear cuenta
+          <Button href="/#planes" size="sm">
+            Comprar eSIM
           </Button>
         </div>
 

@@ -6,9 +6,9 @@ test.describe("Sitio público", () => {
     const errors: string[] = [];
     page.on("pageerror", (e) => errors.push(e.message));
     await page.goto("/");
-    await expect(page.getByRole("heading", { level: 1 })).toContainText("Internet 5G");
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Internet para tu celular");
     await scrollThrough(page);
-    for (const text of ["Conectado a la red Telcel 5G", "Sin registros ni papeleo", "Navega sin restricciones", "Elige tus datos", "Cuatro pasos", "compatible", "Lo que todos preguntan"]) {
+    for (const text of ["Elige tus datos", "Cómo funciona", "Tu número para verificar apps", "compatible", "Preguntas frecuentes"]) {
       const el = page.getByText(text, { exact: false }).filter({ visible: true }).first();
       await el.scrollIntoViewIfNeeded();
       await expect(el).toBeVisible();
@@ -20,7 +20,7 @@ test.describe("Sitio público", () => {
 
   test("FAQ: abre y cierra respuestas", async ({ page }) => {
     await page.goto("/");
-    const q = page.getByRole("button", { name: /¿Me piden CURP/ });
+    const q = page.getByRole("button", { name: /¿Mi celular es compatible/ });
     await q.scrollIntoViewIfNeeded();
     await q.click();
     await expect(q).toHaveAttribute("aria-expanded", "true");
@@ -28,8 +28,8 @@ test.describe("Sitio público", () => {
     await expect(q).toHaveAttribute("aria-expanded", "false");
   });
 
-  test("navegación: menú, planes y CTA a registro con plan", async ({ page, isMobile }) => {
-    await page.goto("/");
+  test("navegación: menú, planes y pago con SPEI desde el picker", async ({ page, isMobile }) => {
+    await page.goto("/terminos");
     if (isMobile) {
       await page.getByRole("button", { name: "Abrir menú" }).click();
       const menu = page.getByRole("dialog", { name: "Menú" });
@@ -38,15 +38,16 @@ test.describe("Sitio público", () => {
     } else {
       await page.getByRole("banner").getByRole("link", { name: "Planes" }).click();
     }
-    await expect(page).toHaveURL(/planes/);
+    await expect(page).toHaveURL(/#planes/);
     await page.goto("/planes");
     await expect(page.getByText("20 GB").filter({ visible: true }).first()).toBeVisible();
-    await page.locator('a[href*="/registro?plan=MX_20_30"]').first().click();
-    await expect(page).toHaveURL(/\/registro\?plan=MX_20_30/);
+    await page.getByTestId("spei-link").click();
+    await expect(page).toHaveURL(/\/entrar\?next=/);
+    expect(decodeURIComponent(page.url())).toContain("/app/comprar?plan=MX_20_30");
   });
 
   test("páginas legales y SEO", async ({ page, request }) => {
-    for (const p of ["/terminos", "/privacidad"]) {
+    for (const p of ["/terminos", "/privacidad", "/reembolsos"]) {
       await page.goto(p);
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     }

@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CircleCheck, CircleX, Clock, CreditCard, Headset, Lock, TriangleAlert, Undo2 } from "lucide-react";
+import { CircleCheck, CircleX, Clock, CreditCard, Headset, Lock, Undo2 } from "lucide-react";
 import { requireUser } from "@/lib/session";
 import { paymentInstructions } from "@/lib/deposits";
 import { getUserDeposit } from "@/lib/queries";
 import { openpayEnabled, syncCardDeposit } from "@/lib/openpay";
+import { syncStripeDeposit } from "@/lib/checkout";
 import { formatMxn } from "@/lib/pricing";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -28,12 +29,21 @@ export default async function DepositPage({ params }: PageProps<"/app/fondos/[id
   let dep = await getUserDeposit(user.id, id);
   if (!dep) notFound();
 
-  // Tarjeta pendiente: consulta el cargo en Openpay (por si el webhook aún no llega).
-  if (dep.method === "card" && dep.status === "pending" && openpayEnabled()) {
-    const synced = await syncCardDeposit(dep.id).catch((e) => {
-      console.error("syncCardDeposit", e);
-      return "pending";
-    });
+  // Tarjeta pendiente: consulta el pago en Stripe (o en Openpay, cargos anteriores) por si el webhook aún no llega.
+  const provider = (dep.meta as { provider?: string } | null)?.provider;
+  if (dep.method === "card" && dep.status === "pending") {
+    const synced =
+      provider === "stripe"
+        ? await syncStripeDeposit(dep.id).catch((e) => {
+            console.error("syncStripeDeposit", e);
+            return "pending";
+          })
+        : openpayEnabled()
+          ? await syncCardDeposit(dep.id).catch((e) => {
+              console.error("syncCardDeposit", e);
+              return "pending";
+            })
+          : "pending";
     if (synced !== "pending") dep = (await getUserDeposit(user.id, id)) ?? dep;
   }
 
@@ -116,7 +126,7 @@ export default async function DepositPage({ params }: PageProps<"/app/fondos/[id
     );
   }
 
-  if (isCard && dep.status === "cancelled") {
+  if (isCard && (dep.status === "cancelled" || dep.status === "expired")) {
     return (
       <div className="flex flex-col gap-6">
         <PageHeader back={back} title="Pago con tarjeta" action={<DepositStatusBadge status={dep.status} />} />
@@ -129,8 +139,8 @@ export default async function DepositPage({ params }: PageProps<"/app/fondos/[id
               <div className="flex flex-col gap-2">
                 <h2 className="text-2xl font-semibold text-fg">El pago no se completó</h2>
                 <p className="max-w-prose text-[15px] leading-relaxed text-muted">
-                  No se hizo ningún cargo a tu tarjeta por {amount}. Puede ser un rechazo del banco o que la verificación 3D
-                  Secure no se terminó. Intenta de nuevo o usa otra tarjeta.
+                  No se hizo ningún cargo a tu tarjeta por {amount}. Puede ser un rechazo del banco, que la verificación de tu
+                  banco no se terminó o que la página de pago expiró. Intenta de nuevo o usa otra tarjeta.
                 </p>
                 {cardMeta.error ? <p className="text-[13px] text-subtle">Motivo: {cardMeta.error}</p> : null}
               </div>
@@ -169,7 +179,7 @@ export default async function DepositPage({ params }: PageProps<"/app/fondos/[id
               </p>
             </div>
             <p className="flex items-center gap-1.5 text-[13px] text-subtle">
-              <Lock aria-hidden className="size-3.5" /> Openpay (BBVA) · 3D Secure
+              <Lock aria-hidden className="size-3.5" /> {provider === "stripe" ? "Stripe · pago seguro" : "Openpay (BBVA) · 3D Secure"}
             </p>
           </div>
         </Card>
@@ -205,86 +215,61 @@ export default async function DepositPage({ params }: PageProps<"/app/fondos/[id
   }
 
   // Pending
+  if (dep.method === "usdt") {
+    // Solicitudes USDT anteriores: el método ya no se ofrece.
+    return (
+      <div className="flex flex-col gap-6">
+        <PageHeader back={back} title="Depósito USDT" action={<DepositStatusBadge status={dep.status} />} />
+        <Alert
+          variant="warning"
+          title="Ya no recibimos USDT"
+          action={
+            <Button href="/app/fondos" size="sm">
+              Agregar fondos
+            </Button>
+          }
+        >
+          Agrega saldo por SPEI o con tarjeta. Si ya enviaste este pago, contacta a soporte con tu referencia{" "}
+          <span className="font-mono text-fg">{dep.reference}</span>.
+        </Alert>
+      </div>
+    );
+  }
   const info = paymentInstructions();
-  const isSpei = dep.method !== "usdt";
-  const configured = isSpei ? !!info.spei.clabe : !!info.usdt.address;
+  const configured = !!info.spei.clabe;
 
   return (
     <div className="flex flex-col gap-6 sm:gap-8">
       <AutoRefresh ms={10_000} />
-      <PageHeader
-        back={back}
-        title={isSpei ? "Transfiere por SPEI" : "Envía USDT"}
-        description={`Agrega ${amount} a tu saldo.`}
-        action={<DepositStatusBadge status={dep.status} />}
-      />
+      <PageHeader back={back} title="Transfiere por SPEI" description={`Agrega ${amount} a tu saldo.`} action={<DepositStatusBadge status={dep.status} />} />
 
       {!configured ? (
         <Alert variant="info" icon={<Headset aria-hidden />} title="Datos de pago disponibles pronto">
-          Estamos terminando de habilitar {isSpei ? "las transferencias SPEI" : "los depósitos en USDT"}. Contacta a soporte con
-          tu referencia <span className="font-mono text-fg">{dep.reference}</span> y te ayudamos a recargar.
+          Estamos terminando de habilitar las transferencias SPEI. Contacta a soporte con tu referencia{" "}
+          <span className="font-mono text-fg">{dep.reference}</span> y te ayudamos a recargar.
         </Alert>
       ) : (
         <FadeIn immediate>
           <Card className="overflow-hidden">
             <CardHeader>
-              <CardTitle>{isSpei ? "Datos para tu transferencia" : "Datos para tu envío"}</CardTitle>
-              <CardDescription>
-                {isSpei
-                  ? "Desde la app de tu banco, crea una transferencia SPEI con estos datos."
-                  : "Desde tu wallet o exchange, envía exactamente este monto."}
-              </CardDescription>
+              <CardTitle>Datos para tu transferencia</CardTitle>
+              <CardDescription>Desde la app de tu banco, crea una transferencia SPEI con estos datos.</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
-              {isSpei ? (
-                <>
-                  <CopyField
-                    label="Referencia / concepto"
-                    value={dep.reference}
-                    size="lg"
-                    hint="Escríbela en el concepto o referencia. Así identificamos tu pago."
-                    copyLabel="Copiar referencia"
-                    className="border-lavender/30 bg-primary/[0.07]"
-                  />
-                  <CopyField label="CLABE" value={info.spei.clabe} display={groupClabe(info.spei.clabe)} copyLabel="Copiar CLABE" />
-                  <CopyField
-                    label="Monto exacto"
-                    value={(dep.amountCents / 100).toFixed(2)}
-                    display={amount}
-                    copyLabel="Copiar monto"
-                  />
-                  <div className="divide-y divide-border px-1">
-                    {info.spei.bank ? <InfoRow label="Banco">{info.spei.bank}</InfoRow> : null}
-                    <InfoRow label="Beneficiario">{info.spei.beneficiary}</InfoRow>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <CopyField
-                    label="Monto exacto en USDT"
-                    value={dep.expectedUsdt ?? ""}
-                    display={`${dep.expectedUsdt} USDT`}
-                    size="lg"
-                    hint={`Equivale a ${amount}. Los decimales identifican tu pago.`}
-                    copyLabel="Copiar monto en USDT"
-                    className="border-lavender/30 bg-primary/[0.07]"
-                  />
-                  <CopyField label="Dirección" value={info.usdt.address} copyLabel="Copiar dirección" />
-                  <div className="divide-y divide-border px-1">
-                    <InfoRow label="Red">
-                      <span className="font-medium">{info.usdt.network}</span>
-                    </InfoRow>
-                    <InfoRow label="Referencia">
-                      <span className="font-mono">{dep.reference}</span>
-                    </InfoRow>
-                  </div>
-                  <Alert variant="warning" icon={<TriangleAlert aria-hidden />} title="Envía solo por esta red">
-                    Envía exactamente <span className="font-mono text-fg">{dep.expectedUsdt} USDT</span> por{" "}
-                    <span className="text-fg">{info.usdt.network}</span>. Si usas otra red o un monto diferente, el pago no se
-                    acreditará automáticamente y podría perderse. Si tu exchange descuenta una comisión del envío, súmala para que llegue el monto exacto.
-                  </Alert>
-                </>
-              )}
+              <CopyField
+                label="Referencia / concepto"
+                value={dep.reference}
+                size="lg"
+                hint="Escríbela en el concepto o referencia. Así identificamos tu pago."
+                copyLabel="Copiar referencia"
+                className="border-lavender/30 bg-primary/[0.07]"
+              />
+              <CopyField label="CLABE" value={info.spei.clabe} display={groupClabe(info.spei.clabe)} copyLabel="Copiar CLABE" />
+              <CopyField label="Monto exacto" value={(dep.amountCents / 100).toFixed(2)} display={amount} copyLabel="Copiar monto" />
+              <div className="divide-y divide-border px-1">
+                {info.spei.bank ? <InfoRow label="Banco">{info.spei.bank}</InfoRow> : null}
+                <InfoRow label="Beneficiario">{info.spei.beneficiary}</InfoRow>
+              </div>
             </CardContent>
           </Card>
         </FadeIn>

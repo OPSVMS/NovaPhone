@@ -1,14 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Coins, CreditCard, Landmark, Repeat, Zap } from "lucide-react";
+import { CreditCard, Landmark, Repeat, Zap } from "lucide-react";
 import { Segmented } from "@/components/ui/segmented";
 import { CopyField, InfoRow } from "./copy-field";
 import { DepositForm } from "./deposit-form";
 import { CardDepositForm } from "./card-deposit-form";
 import type { CardFeeConfig } from "./card-fee";
 
-export type FundsMethod = "spei" | "card" | "usdt";
+export type FundsMethod = "spei" | "card";
 
 const groupClabe = (c: string) => c.replace(/\s/g, "").replace(/(\d{3})(\d{3})(\d{11})(\d)/, "$1 $2 $3 $4");
 
@@ -45,11 +45,10 @@ export function FundsMethods({
         options={[
           { value: "spei", label: "SPEI", icon: <Landmark aria-hidden /> },
           { value: "card", label: "Tarjeta", icon: <CreditCard aria-hidden /> },
-          { value: "usdt", label: "USDT", icon: <Coins aria-hidden /> },
         ]}
       />
 
-      <div role="region" aria-label={method === "spei" ? "SPEI" : method === "card" ? "Tarjeta" : "USDT"}>
+      <div role="region" aria-label={method === "spei" ? "SPEI" : "Tarjeta"}>
         {method === "spei" ? (
           clabe ? (
             <div className="flex flex-col gap-5">
@@ -91,15 +90,8 @@ export function FundsMethods({
               <DepositForm method="spei" defaultAmount={defaultAmount} min={min} max={max} />
             </div>
           )
-        ) : method === "card" ? (
-          <CardDepositForm enabled={cardEnabled} fee={fee} defaultAmount={defaultAmount} min={min} max={cardMax} />
         ) : (
-          <div className="flex flex-col gap-4">
-            <p className="text-[13px] text-subtle">
-              Envía USDT desde tu wallet o exchange. Se acredita tras confirmarse en la red.
-            </p>
-            <DepositForm method="usdt" defaultAmount={defaultAmount} min={min} max={max} />
-          </div>
+          <CardDepositForm enabled={cardEnabled} fee={fee} defaultAmount={defaultAmount} min={min} max={cardMax} />
         )}
       </div>
     </div>

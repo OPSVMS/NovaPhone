@@ -8,7 +8,7 @@ function subscribe(onChange: () => void) {
   return () => window.removeEventListener("scroll", onChange);
 }
 
-/** Sticky header that turns into a glass bar once the page scrolls. */
+/** Sticky header that turns into a frosted white bar once the page scrolls. */
 export function HeaderShell({ children }: { children: ReactNode }) {
   const scrolled = useSyncExternalStore(
     subscribe,
@@ -21,8 +21,8 @@ export function HeaderShell({ children }: { children: ReactNode }) {
       className={clsx(
         "sticky top-0 z-50 border-b pt-[env(safe-area-inset-top)] transition-[background-color,border-color,backdrop-filter] duration-300 ease-out-expo",
         scrolled
-          ? "border-border bg-bg/72 backdrop-blur-xl backdrop-saturate-150"
-          : "border-transparent bg-transparent",
+          ? "border-border bg-surface/90 shadow-[0_1px_8px_-4px_rgb(11_27_51/0.12)] backdrop-blur-xl backdrop-saturate-150"
+          : "border-transparent bg-bg",
       )}
     >
       {children}

@@ -36,12 +36,13 @@ const sections: LegalSection[] = [
     body: (
       <>
         <p>
-          Las compras se realizan con saldo prepagado en tu cuenta. Puedes recargar saldo por transferencia SPEI o con
-          USDT (red TRC20). Los precios se muestran en pesos mexicanos e incluyen IVA.
+          Puedes pagar con tarjeta de crédito o débito (Visa, Mastercard, American Express), Apple Pay o Google Pay a
+          través de Stripe, o con saldo prepagado en tu cuenta recargado por transferencia SPEI. Los precios se muestran
+          en pesos mexicanos e incluyen IVA.
         </p>
         <ul>
           <li>El saldo se acredita una vez que confirmamos la recepción del pago.</li>
-          <li>Los envíos de USDT deben hacerse por la red TRC20 y por el monto exacto indicado.</li>
+          <li>Los datos de tu tarjeta los procesa Stripe; NovaPhone no los almacena.</li>
           <li>El saldo no genera intereses ni es un instrumento de ahorro.</li>
         </ul>
       </>
@@ -66,9 +67,10 @@ const sections: LegalSection[] = [
     title: "Cancelaciones y reembolsos",
     body: (
       <p>
-        Una vez instalada o activada, una eSIM no puede reutilizarse ni reembolsarse. Si hay una falla atribuible al
-        servicio que no podamos resolver, te devolveremos el importe a tu saldo. Escríbenos desde tu panel para revisar
-        tu caso.
+        Garantía de conexión: si no logramos conectarte, te devolvemos el importe. Si no instalaste tu eSIM, puedes
+        pedir el reembolso total dentro de los 30 días posteriores a la compra. El reembolso se hace al mismo medio de
+        pago: a tu tarjeta si pagaste con tarjeta (Stripe), o a tu saldo NovaPhone si pagaste con saldo o SPEI. Consulta
+        los detalles en nuestra <Link href="/reembolsos">Política de reembolsos</Link>.
       </p>
     ),
   },

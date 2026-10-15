@@ -15,15 +15,15 @@ const base =
 
 const variants: Record<ButtonVariant, string> = {
   primary:
-    "bg-primary text-primary-foreground hover:bg-primary-hover " +
-    "shadow-[inset_0_1px_0_0_rgb(255_255_255/0.2),0_8px_24px_-10px_rgb(118_82_240/0.75)] " +
-    "hover:shadow-[inset_0_1px_0_0_rgb(255_255_255/0.25),0_10px_32px_-10px_rgb(132_102_244/0.9)]",
+    "bg-primary font-semibold text-primary-foreground hover:bg-primary-hover " +
+    "shadow-[inset_0_1px_0_0_rgb(255_255_255/0.14),0_8px_20px_-10px_rgb(10_79_163/0.6)] " +
+    "hover:shadow-[inset_0_1px_0_0_rgb(255_255_255/0.18),0_10px_26px_-10px_rgb(8_63_133/0.7)]",
   secondary:
     "border border-border bg-surface-2 text-fg hover:border-border-strong hover:bg-surface-3 " +
-    "shadow-[inset_0_1px_0_0_rgb(255_255_255/0.04)]",
-  outline: "border border-border-strong bg-transparent text-fg hover:bg-white/[0.04]",
-  ghost: "bg-transparent text-muted hover:bg-white/[0.05] hover:text-fg",
-  inverse: "bg-fg text-bg hover:bg-white shadow-[0_8px_24px_-12px_rgb(255_255_255/0.35)]",
+    "shadow-[0_1px_2px_0_rgb(11_27_51/0.05)]",
+  outline: "border border-border-strong bg-surface text-fg hover:border-primary/40 hover:bg-surface-2",
+  ghost: "bg-transparent text-muted hover:bg-hover hover:text-fg",
+  inverse: "bg-surface text-primary hover:bg-surface-2 shadow-[0_8px_24px_-12px_rgb(0_0_0/0.35)]",
   danger: "border border-danger/25 bg-danger/10 text-danger hover:border-danger/40 hover:bg-danger/15",
 };
 

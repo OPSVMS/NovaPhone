@@ -11,3 +11,6 @@ export const formatPesos = (mxn: number) => pesos.format(mxn);
 export const formatPerGb = (mxn: number, gb: number) => pesos.format(Math.round(mxn / Math.max(gb, 0.1)));
 
 export const formatDays = (days: number) => (days === 1 ? "1 día" : `${days} días`);
+
+/** Price that always reads as pesos, e.g. 599 → "$599 MXN". */
+export const formatMxn = (mxn: number) => `${pesos.format(mxn)} MXN`;

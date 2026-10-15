@@ -184,7 +184,7 @@ export default async function AdminPage() {
                 }
               />
               <ProviderRow name="NOVACORE" detail="SPEI y CLABEs personales" status={enabledBadge(o.providers.novacore)} />
-              <ProviderRow name="Openpay" detail="Pagos con tarjeta" status={enabledBadge(o.providers.openpay)} />
+              <ProviderRow name="Stripe" detail="Pagos con tarjeta (MXN)" status={enabledBadge(o.providers.stripe)} />
               <ProviderRow name="Correo" detail="Envío de correos transaccionales" status={enabledBadge(o.providers.email)} />
               <ProviderRow
                 name="Tipo de cambio"

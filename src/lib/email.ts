@@ -69,9 +69,16 @@ export function sendPasswordChanged(to: string) {
 
 // ─── eSIM ────────────────────────────────────────────────────────────────────
 
-export function sendEsimReady(to: string, o: { planName: string; activationCode: string; orderUrl: string; qrDataUrl: string }) {
+export function sendEsimReady(
+  to: string,
+  o: { planName: string; activationCode: string; orderUrl: string; qrDataUrl: string; orderId?: string; accountUrl?: string },
+) {
   const qr = inlineImage(o.qrDataUrl, "esim-qr");
-  return send(to, t.esimReady({ planName: o.planName, activationCode: o.activationCode, orderUrl: o.orderUrl, qrSrc: qr.src }), qr.attachments);
+  return send(
+    to,
+    t.esimReady({ planName: o.planName, activationCode: o.activationCode, orderUrl: o.orderUrl, qrSrc: qr.src, orderId: o.orderId, accountUrl: o.accountUrl }),
+    qr.attachments,
+  );
 }
 
 export function sendAutoTopupDone(to: string, planName: string, orderId: string) {
@@ -103,16 +110,13 @@ export function sendDepositCredited(to: string, amount: string) {
 export function sendDepositRequested(
   to: string,
   o: {
-    method: "spei" | "usdt" | "card";
+    method: "spei" | "card";
     amount: string;
     reference: string;
     depositUrl: string;
     clabe?: string;
     bank?: string;
     beneficiary?: string;
-    usdtAmount?: string;
-    usdtAddress?: string;
-    usdtNetwork?: string;
   },
 ) {
   return send(to, t.depositRequested(o));

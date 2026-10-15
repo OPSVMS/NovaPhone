@@ -2,12 +2,10 @@
 
 import { useActionState, useId, useState } from "react";
 import clsx from "clsx";
-import { Coins, Landmark } from "lucide-react";
 import { requestDeposit } from "@/app/actions/wallet";
 import type { FormState } from "@/app/actions/auth";
 import { controlClass } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Segmented } from "@/components/ui/segmented";
 import { SubmitButton } from "@/components/ui/submit-button";
 
 const CHIPS = [200, 500, 1000, 2000];
@@ -107,23 +105,19 @@ export function AmountField({
   );
 }
 
+/** Solicitud de depósito SPEI con referencia (solo si el usuario aún no tiene CLABE personal). */
 export function DepositForm({
   defaultAmount,
-  defaultMethod = "spei",
-  method: fixedMethod,
   min,
   max,
 }: {
   defaultAmount?: number;
-  defaultMethod?: "spei" | "usdt";
-  /** Fija el método (oculta el selector). */
-  method?: "spei" | "usdt";
+  /** Compatibilidad: solo existe SPEI. */
+  method?: "spei";
   min: number;
   max: number;
 }) {
   const [state, action] = useActionState<FormState, FormData>(requestDeposit, undefined);
-  const [pickedMethod, setMethod] = useState<"spei" | "usdt">(defaultMethod);
-  const method = fixedMethod ?? pickedMethod;
   const [amount, setAmount] = useState(defaultAmount ? String(defaultAmount) : "");
   const [touched, setTouched] = useState(false);
 
@@ -142,30 +136,7 @@ export function DepositForm({
       }}
       className="flex flex-col gap-6"
     >
-      {fixedMethod ? (
-        <input type="hidden" name="method" value={fixedMethod} />
-      ) : (
-        <div className="flex flex-col gap-2">
-          <span className="text-sm font-medium text-fg">Método de pago</span>
-          <Segmented<"spei" | "usdt">
-            aria-label="Método de pago"
-            name="method"
-            value={method}
-            onValueChange={setMethod}
-            fullWidth
-            options={[
-              { value: "spei", label: "SPEI", icon: <Landmark aria-hidden /> },
-              { value: "usdt", label: "USDT", icon: <Coins aria-hidden /> },
-            ]}
-          />
-          <p className="text-[13px] text-subtle">
-            {method === "spei"
-              ? "Transferencia desde tu banco o app. Se acredita en minutos."
-              : "Envía USDT desde tu wallet o exchange. Se acredita tras confirmarse en la red."}
-          </p>
-        </div>
-      )}
-
+      <input type="hidden" name="method" value="spei" />
       <AmountField
         amount={amount}
         onAmountChange={(v, chip) => {

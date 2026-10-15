@@ -99,12 +99,12 @@ export function CardDepositForm({
         </SubmitButton>
         <p className="flex items-center justify-center gap-1.5 text-center text-[13px] text-subtle">
           <Lock aria-hidden className="size-3.5 shrink-0" />
-          Pago seguro con Openpay (BBVA) · 3D Secure
+          Pago seguro con Stripe · Apple Pay y Google Pay
         </p>
       </div>
       <p className="text-[13px] leading-relaxed text-subtle">
-        Te llevamos a la página segura de Openpay para capturar tu tarjeta; NovaPhone nunca ve sus datos. Al terminar regresas
-        aquí y tu saldo se acredita al instante.
+        Te llevamos a la página segura de Stripe para pagar con tarjeta, Apple Pay o Google Pay; NovaPhone nunca ve los datos de
+        tu tarjeta. Al terminar regresas aquí y tu saldo se acredita al instante.
       </p>
     </form>
   );

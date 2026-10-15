@@ -3,7 +3,7 @@ import { scrollThrough, speiToClabe, dbQuery, PASSWORD, login } from "./helpers"
 
 /**
  * Recorrido completo como usuario normal, navegando con los menús (no con URLs directas):
- * landing → registro → fondos (SPEI/tarjeta/USDT) → depósito → compra → eSIM → recarga → auto-recarga
+ * landing → registro → fondos (SPEI/tarjeta) → depósito → compra → eSIM → recarga → auto-recarga
  * → número + SMS → movimientos → cerrar sesión → volver a entrar. Falla si hay errores de JS o respuestas 5xx.
  */
 test("recorrido completo del usuario sin errores", async ({ page, request }, testInfo) => {
@@ -38,7 +38,7 @@ test("recorrido completo del usuario sin errores", async ({ page, request }, tes
   await expect(page.getByText(/María/).filter({ visible: true }).first()).toBeVisible();
   await snap("inicio-vacio");
 
-  // 2. Fondos: los tres métodos.
+  // 2. Fondos: SPEI y tarjeta (USDT ya no se ofrece).
   await nav(page, "Fondos").click();
   await expect(page.getByText("Tu CLABE personal").first()).toBeVisible();
   await snap("fondos-spei");
@@ -47,8 +47,7 @@ test("recorrido completo del usuario sin errores", async ({ page, request }, tes
   await card.locator('input[name="amount"]').fill("300");
   await expect(card.getByText(/Pagas/)).toBeVisible();
   await snap("fondos-tarjeta");
-  await page.getByRole("radio", { name: /USDT/ }).click();
-  await expect(page.getByRole("region", { name: "USDT" })).toBeVisible();
+  await expect(page.getByRole("radio", { name: /USDT/ })).toHaveCount(0);
 
   // Depósito real a su CLABE (simulado en NOVACORE).
   const [{ clabe }] = await dbQuery<{ clabe: string }>("select clabe from users where email = $1", [email]);

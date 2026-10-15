@@ -105,7 +105,7 @@ export function Segmented<T extends string>({
               <motion.span
                 layoutId={layoutId}
                 aria-hidden
-                className="absolute inset-0 -z-10 rounded-[10px] border border-border-strong bg-surface-3 shadow-[inset_0_1px_0_0_rgb(255_255_255/0.06),0_4px_16px_-6px_rgb(0_0_0/0.6)]"
+                className="absolute inset-0 -z-10 rounded-[10px] border border-border-strong bg-surface-3 shadow-[0_1px_2px_0_rgb(11_27_51/0.08),0_4px_12px_-6px_rgb(11_27_51/0.2)]"
                 transition={{ type: "spring", bounce: 0.15, duration: 0.45 }}
               />
             ) : null}
