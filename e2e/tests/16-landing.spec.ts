@@ -1,7 +1,8 @@
 import { test, expect, type Page } from "@playwright/test";
 
 /**
- * Landing de venta (home): picker con 3 planes, 20 GB preseleccionado, barra fija en celular y botón de compra
+ * Landing de venta (home): picker con todos los planes a la vista (1 GB "Para probar", 20 GB recomendado y
+ * preseleccionado), barra fija en celular que nunca tapa la lista, y botón de compra
  * que llama a `startCardCheckout` → Stripe Checkout (simulador en e2e/mock, /stripe/pay/{id}).
  */
 
@@ -12,7 +13,7 @@ async function collectErrors(page: Page) {
 }
 
 test.describe("Landing de venta", () => {
-  test("hero y picker: 3 planes visibles, 20 GB recomendado y preseleccionado", async ({ page }) => {
+  test("hero y picker: todos los planes visibles, 1 GB para probar, 20 GB recomendado y preseleccionado", async ({ page }) => {
     const errors = await collectErrors(page);
     await page.goto("/");
     await expect(page.getByRole("heading", { level: 1 })).toContainText("Internet para tu celular");
@@ -20,15 +21,39 @@ test.describe("Landing de venta", () => {
 
     const picker = page.getByTestId("plan-picker").first();
     await expect(picker).toBeVisible();
-    // Visibles: 5 GB, 20 GB y 10 GB (si el catálogo lo tiene; el de E2E no). 1 GB queda detrás de "Ver más planes".
-    for (const id of ["MX_5_30", "MX_20_30"]) await expect(picker.getByTestId(`plan-${id}`)).toBeVisible();
-    await expect(picker.getByTestId("plan-MX_1_7")).toHaveCount(0);
-    expect(await picker.getByRole("radio").count()).toBeLessThanOrEqual(3);
+    // Todos los planes ofrecidos a la vez, sin "Ver más planes" (el catálogo de E2E tiene 1, 3/15, 5 y 20 GB;
+    // producción además 3/30 y 10 GB). Orden de menor a mayor: 1 GB primero, 20 GB al final.
+    await expect(picker.getByTestId("more-plans")).toHaveCount(0);
+    const shown = ["MX_1_7", "MX_3_15", "MX_5_30", "MX_20_30"];
+    for (const id of shown) await expect(picker.getByTestId(`plan-${id}`)).toBeVisible();
+    const ids = await picker.locator('[data-testid^="plan-MX_"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-testid")));
+    expect(ids.length).toBeGreaterThanOrEqual(shown.length);
+    expect(ids.length).toBeLessThanOrEqual(6);
+    expect(ids[0]).toBe("plan-MX_1_7");
+    expect(ids.at(-1)).toBe("plan-MX_20_30");
+    await expect(picker.getByRole("radio")).toHaveCount(ids.length);
     await expect(page.getByText("1,829")).toHaveCount(0); // 50 GB ya no se ofrece
+    await expect(picker.getByTestId("plan-MX_2_7")).toHaveCount(0); // en el catálogo, pero no se publicita
+
+    // Precio por GB bajo cada precio.
+    const p20 = Number((await picker.getByTestId("price-MX_20_30").innerText()).replace(/[^0-9]/g, ""));
+    await expect(picker.getByTestId("per-gb-MX_20_30")).toHaveText(`$${Math.round(p20 / 20)}/GB`);
+    await expect(picker.getByTestId("per-gb-MX_1_7")).toHaveText(/^\$\d+\/GB$/);
+
+    // 1 GB: insignia "Para probar" y nota para la primera compra.
+    const trial = picker.getByTestId("plan-MX_1_7");
+    await expect(trial.getByTestId("badge-trial")).toHaveText(/para probar/i);
+    await expect(picker.getByTestId("badge-trial")).toHaveCount(1);
+    const p1 = await picker.getByTestId("price-MX_1_7").innerText();
+    await expect(picker.getByTestId("trial-note")).toHaveText(
+      `¿Primera vez? Prueba con 1 GB por ${p1} y recarga después desde tu panel.`,
+    );
 
     const rec = picker.getByTestId("plan-MX_20_30");
-    await expect(rec).toContainText("Recomendado");
+    await expect(rec.getByTestId("badge-recommended")).toHaveText(/recomendado/i);
+    await expect(picker.getByTestId("badge-recommended")).toHaveCount(1);
     await expect(rec.getByRole("radio")).toBeChecked();
+    await expect(picker.getByRole("radio", { checked: true })).toHaveCount(1);
     const recPrice = await picker.getByTestId("price-MX_20_30").innerText();
     await expect(picker.getByTestId("buy-button")).toContainText(`Comprar ahora — ${recPrice} MXN`);
 
@@ -49,7 +74,7 @@ test.describe("Landing de venta", () => {
     expect(errors).toEqual([]);
   });
 
-  test("cambiar de plan y 'Ver más planes'", async ({ page }) => {
+  test("cambiar de plan y la nota 'Prueba con 1 GB' elige el de 1 GB", async ({ page }) => {
     await page.goto("/");
     const picker = page.getByTestId("plan-picker").first();
     await picker.getByTestId("plan-MX_5_30").click();
@@ -58,11 +83,11 @@ test.describe("Landing de venta", () => {
     await expect(picker.getByTestId("buy-button")).toContainText(`${p5} MXN`);
     await expect(picker.getByTestId("spei-link")).toHaveAttribute("href", "/app/comprar?plan=MX_5_30");
 
-    await picker.getByTestId("more-plans").click();
-    await expect(picker.getByTestId("plan-MX_1_7")).toBeVisible();
-    await picker.getByTestId("plan-MX_1_7").click();
+    await picker.getByTestId("trial-note").getByRole("button", { name: /Prueba con 1 GB/ }).click();
+    await expect(picker.getByTestId("plan-MX_1_7").getByRole("radio")).toBeChecked();
     const p1 = await picker.getByTestId("price-MX_1_7").innerText();
     await expect(picker.getByTestId("buy-button")).toContainText(`${p1} MXN`);
+    await expect(picker.getByTestId("spei-link")).toHaveAttribute("href", "/app/comprar?plan=MX_1_7");
   });
 
   test("?plan= preselecciona (regreso de un pago cancelado)", async ({ page }) => {
@@ -72,10 +97,23 @@ test.describe("Landing de venta", () => {
     await expect(picker.getByText("No se hizo ningún cargo")).toBeVisible();
   });
 
-  test("barra fija en celular con el precio del plan elegido", async ({ page, isMobile }) => {
+  test("barra fija en celular con el precio del plan elegido; nunca tapa la lista", async ({ page, isMobile }) => {
     test.skip(!isMobile, "La barra fija es solo para celular");
     await page.goto("/");
     const bar = page.getByTestId("sticky-bar");
+    // Sin scroll, la lista se ve (hero compacto) y la barra no la tapa.
+    await expect(page.getByTestId("plan-MX_1_7")).toBeInViewport();
+    await expect(bar).toHaveAttribute("data-sticky-bar", "off");
+    // Con el último plan pegado al borde inferior, la barra sigue escondida (no lo tapa).
+    await page.getByTestId("plan-MX_20_30").evaluate((el) => el.scrollIntoView({ block: "end" }));
+    await expect(page.getByTestId("plan-MX_20_30")).toBeInViewport({ ratio: 1 });
+    await expect(bar).toHaveAttribute("data-sticky-bar", "off");
+    // Hero + lista + botón de compra a un scroll: el botón queda dentro de las dos primeras pantallas.
+    const buyBottom = await page.getByTestId("buy-button").evaluate((el) => el.getBoundingClientRect().bottom + window.scrollY);
+    expect(buyBottom).toBeLessThan(2 * page.viewportSize()!.height);
+    // Sin desbordamiento horizontal.
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0);
+
     // Lejos del botón del picker (p. ej. en las preguntas), la barra se ve.
     await page.locator("#preguntas").scrollIntoViewIfNeeded();
     await expect(bar).toHaveAttribute("data-sticky-bar", "on");

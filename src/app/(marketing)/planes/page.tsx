@@ -3,7 +3,7 @@ import { Container } from "@/components/ui/container";
 import { FaqSection } from "@/components/marketing/faq-section";
 import { HowItWorks } from "@/components/marketing/how-it-works";
 import { PlanPicker } from "@/components/marketing/plan-picker";
-import { RECOMMENDED_PLAN_ID, VISIBLE_PLAN_IDS, getMarketingPlans } from "@/components/marketing/plans-data";
+import { RECOMMENDED_PLAN_ID, getMarketingPlans } from "@/components/marketing/plans-data";
 
 export const revalidate = 3600;
 
@@ -28,7 +28,7 @@ export default async function PlanesPage() {
             <p className="text-[17px] leading-relaxed text-muted">Red Telcel 5G. Sin contrato. Precios en pesos con IVA.</p>
           </div>
           <div className="rounded-panel border border-border bg-surface p-4 shadow-raised sm:p-6">
-            <PlanPicker plans={plans} visibleIds={VISIBLE_PLAN_IDS} recommendedId={RECOMMENDED_PLAN_ID} expanded />
+            <PlanPicker plans={plans} recommendedId={RECOMMENDED_PLAN_ID} />
           </div>
         </Container>
       </section>

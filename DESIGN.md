@@ -277,9 +277,10 @@ import { Stagger, StaggerItem } from "@/components/motion/stagger";  // client
 
 Mobile-first, under 5 screens, in this order: **Hero + plan picker** (`hero.tsx`, `plan-picker.tsx`) → **Cómo funciona** (3 steps) → optional **+44 number** one-liner → **4 FAQs** + WhatsApp → footer (MASMOVIL S.A. de C.V., Guadalajara).
 
-- Picker: 3 plans visible (`VISIBLE_PLAN_IDS` = 5 GB, **20 GB recomendado**, 10 GB), recommended preselected, "Ver más planes" for the rest (`MARKETED_PLAN_IDS` in `plans-data.ts`; 50 GB is not marketed). Price per GB under each plan.
+- Picker: **every** marketed plan visible at once (`MARKETED_PLAN_IDS` in `plans-data.ts`: 1 GB/7 d, 3 GB/15 d, 3 GB/30 d, 5, 10, 20 GB/30 d; 50 GB is not marketed), cheapest first, as compact one-line rows ("1 GB · 7 días" left, "$39 MXN" + tiny "$39/GB" right) so all six fit in about one phone screen. **20 GB "Recomendado"** is last and preselected; 1 GB/7 d carries a "Para probar" badge, and the note under the list reads "¿Primera vez? Prueba con 1 GB por $39 y recarga después desde tu panel." (tapping it selects 1 GB). Mexican buyers want to try cheap first (director decision 2026-10-16).
 - Buy button "Comprar ahora — $599 MXN" → server action `startCardCheckout({ planId })` → Stripe (Stripe collects the email; no email step on our page). Guarantee line and payment row right under the button; secondary link "Pagar con SPEI / ya tengo cuenta" → `/app/comprar?plan=…`.
-- Mobile sticky bar (WhatsApp + "Comprar ahora — $X MXN") hides while the in-page button is visible.
+- Mobile sticky bar (WhatsApp + "Comprar ahora — $X MXN") hides while any part of the plan list or the in-page buy button is on screen, so it never covers a plan.
+- Mobile budget (390×844): hero + picker + buy button within one scroll (today the button sits at the bottom of the first screen). Keep the hero copy compact.
 - Funnel events: `plan_select`, `buy_click`, `checkout_redirect`, `buy_error` (+ GA4 `view_item_list`, `select_item`, `begin_checkout`) via `src/components/marketing/funnel.ts`.
 - `/planes` renders the same picker with every plan visible. `/reembolsos` holds the 30-day refund + connection guarantee.
 - JSON-LD: Organization + Product/AggregateOffer (`json-ld.tsx`) and FAQPage (`faq-section.tsx`).

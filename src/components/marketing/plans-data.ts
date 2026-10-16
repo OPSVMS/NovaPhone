@@ -35,9 +35,6 @@ export const MARKETED_PLAN_IDS = ["MX_1_7", "MX_3_15", "MX_3_30", "MX_5_30", "MX
 /** Recommended plan: preselected in the picker and used in the hero copy. */
 export const RECOMMENDED_PLAN_ID = "MX_20_30";
 
-/** Plans shown before "Ver más planes", in this order (recommended in the middle). */
-export const VISIBLE_PLAN_IDS = ["MX_5_30", "MX_20_30", "MX_10_30"] as const;
-
 /** Active plans for the public site, sorted by data then validity. */
 export async function getMarketingPlans(): Promise<MarketingPlan[]> {
   try {
