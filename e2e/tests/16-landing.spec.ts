@@ -2,7 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 
 /**
  * Landing de venta (home): picker con todos los planes a la vista (1 GB "Para probar", 20 GB recomendado y
- * preseleccionado), barra fija en celular que nunca tapa la lista, y botón de compra
+ * preseleccionado), correo obligatorio, número opcional (+$79), barra fija en celular que nunca tapa la lista, y botón de compra
  * que llama a `startCardCheckout` → Stripe Checkout (simulador en e2e/mock, /stripe/pay/{id}).
  */
 
@@ -67,10 +67,22 @@ test.describe("Landing de venta", () => {
     await expect(picker.getByTestId("guarantee")).toHaveAttribute("href", "/reembolsos");
     await expect(picker.getByTestId("spei-link")).toHaveAttribute("href", "/app/comprar?plan=MX_20_30");
 
-    // Nada de cripto ni "US$" en la página pública.
+    // Nada de cripto ni "US$" en la página pública; el número nunca se anuncia como "+44" ni "Reino Unido".
     const body = (await page.locator("body").innerText()).toLowerCase();
     expect(body).not.toContain("usdt");
     expect(body).not.toContain("us$");
+    expect(body).not.toContain("+44");
+    expect(body).not.toContain("reino unido");
+
+    // "Lo que incluye tu cuenta": 6 beneficios y un botón que regresa al picker.
+    const benefits = page.getByTestId("account-benefits");
+    await expect(benefits.getByRole("listitem")).toHaveCount(6);
+    await expect(benefits).toContainText("Varias eSIMs en una cuenta");
+    await expect(benefits).not.toContainText(/100 eSIMs|varios números/i);
+    await page.getByTestId("benefits-cta").evaluate((el) => el.scrollIntoView({ block: "center" }));
+    await page.getByTestId("benefits-cta").click();
+    await expect(page).toHaveURL(/#elegir-plan$/);
+    await expect(picker.getByTestId("plan-MX_20_30")).toBeInViewport();
     expect(errors).toEqual([]);
   });
 
@@ -88,6 +100,38 @@ test.describe("Landing de venta", () => {
     const p1 = await picker.getByTestId("price-MX_1_7").innerText();
     await expect(picker.getByTestId("buy-button")).toContainText(`${p1} MXN`);
     await expect(picker.getByTestId("spei-link")).toHaveAttribute("href", "/app/comprar?plan=MX_1_7");
+  });
+
+  test("correo obligatorio y número opcional que suma al total", async ({ page }) => {
+    await page.goto("/");
+    const picker = page.getByTestId("plan-picker").first();
+    await expect(picker.getByText("Correo para tu cuenta y tu QR")).toBeVisible();
+    const p20 = Number((await picker.getByTestId("price-MX_20_30").innerText()).replace(/[^0-9]/g, ""));
+
+    // Sin correo no se llama al pago: error en el campo y el foco va ahí.
+    let actions = 0;
+    page.on("request", (r) => {
+      if (r.method() === "POST" && r.headers()["next-action"]) actions++;
+    });
+    await picker.getByTestId("buy-button").click();
+    await expect(picker.getByTestId("email-error")).toHaveText("Escribe un correo válido para enviarte tu eSIM.");
+    await expect(picker.getByTestId("email-input")).toBeFocused();
+    await picker.getByTestId("email-input").fill("no-es-correo");
+    await expect(picker.getByTestId("email-error")).toHaveCount(0);
+    await picker.getByTestId("buy-button").click();
+    await expect(picker.getByTestId("email-error")).toBeVisible();
+    expect(actions).toBe(0);
+
+    // Número opcional: una línea con casilla y "?"; suma $79 al botón.
+    const addon = picker.getByTestId("addon-row");
+    await expect(addon).toContainText("Añadir número para recibir códigos (+$79 MXN / 30 días)");
+    await expect(picker.getByTestId("addon-checkbox")).not.toBeChecked();
+    await picker.getByTestId("addon-checkbox").check();
+    await expect(picker.getByTestId("buy-button")).toContainText(`Comprar ahora — $${p20 + 79} MXN`);
+    await picker.getByTestId("addon-help").click();
+    await expect(addon.getByRole("tooltip")).toContainText("número móvil internacional");
+    await picker.getByTestId("addon-checkbox").uncheck();
+    await expect(picker.getByTestId("buy-button")).toContainText(`Comprar ahora — $${p20} MXN`);
   });
 
   test("?plan= preselecciona (regreso de un pago cancelado)", async ({ page }) => {
@@ -128,12 +172,19 @@ test.describe("Landing de venta", () => {
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
     await expect(bar).toHaveAttribute("data-sticky-bar", "on");
     await expect(page.getByTestId("sticky-buy")).toContainText(`${await page.getByTestId("price-MX_5_30").innerText()} MXN`);
+    // Sin correo, la barra lleva al campo de correo (y deja de tapar el picker).
+    await page.getByTestId("sticky-buy").click();
+    await expect(page.getByTestId("email-error")).toBeVisible();
+    await expect(page.getByTestId("email-input")).toBeInViewport();
+    await expect(page.getByTestId("email-input")).toBeFocused();
+    await expect(bar).toHaveAttribute("data-sticky-bar", "off");
   });
 
   // El simulador de eSIM Access solo tiene 1, 2, 5 y 20 GB activos: se compra 5 GB (no el preseleccionado).
   test("comprar: llama a startCardCheckout y redirige a Stripe (mock) con el plan elegido", async ({ page, isMobile }) => {
     await page.goto("/");
     await page.getByTestId("plan-MX_5_30").click();
+    await page.getByTestId("email-input").fill(`landing+${Date.now()}${Math.floor(Math.random() * 1e4)}@novaphone.test`);
     const price = (await page.getByTestId("price-MX_5_30").innerText()).replace(/[^0-9]/g, "");
     const action = page.waitForRequest((r) => r.method() === "POST" && !!r.headers()["next-action"]);
     if (isMobile) {

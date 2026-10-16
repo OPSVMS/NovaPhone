@@ -4,7 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import clsx from "clsx";
 import { motion } from "motion/react";
-import { CalendarClock, Check, CircleHelp, CircleX, Clock, Mail, QrCode, Smartphone, UserRound } from "lucide-react";
+import { CalendarClock, Check, CircleHelp, CircleX, Clock, Mail, MessageSquareText, QrCode, Smartphone, UserRound } from "lucide-react";
 import type { OrderForSuccess } from "@/lib/checkout";
 import { PurchaseTracker } from "@/components/analytics/purchase-tracker";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -156,6 +156,30 @@ export function OrderSuccess({ initial, token }: { initial: OrderForSuccess; tok
               </div>
             </dl>
           </Card>
+
+          {order.number ? (
+            <Card className="flex flex-col gap-3 p-5" data-testid="order-number">
+              <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-fg">
+                <MessageSquareText aria-hidden className="size-5 text-lavender" /> Tu número para códigos
+              </h2>
+              <p className="font-mono text-xl font-semibold tracking-wide text-fg tabular-nums" data-testid="order-number-e164">
+                {order.number.e164}
+              </p>
+              <p className="text-sm leading-relaxed text-muted">
+                Tu número para códigos: {order.number.e164}; los mensajes llegan a tu panel. Úsalo para recibir SMS de verificación durante 30 días.
+              </p>
+              <Link href="/app/numero" className="text-sm font-medium text-lavender underline-offset-4 hover:underline">
+                Ver mensajes en mi panel
+              </Link>
+            </Card>
+          ) : order.numberRefund ? (
+            <p className="rounded-2xl border border-border bg-surface-2 px-4 py-3 text-sm leading-relaxed text-muted" data-testid="order-number-refund">
+              Por ahora no había números para recibir códigos.{" "}
+              {order.numberRefund.to === "card"
+                ? `Te devolvimos ${fmtMxn(order.numberRefund.amountMxn)} a tu tarjeta.`
+                : `Te dejamos ${fmtMxn(order.numberRefund.amountMxn)} como saldo en tu cuenta.`}
+            </p>
+          ) : null}
 
           {order.email ? (
             <Card className="flex flex-col gap-3 p-5" data-testid="account-box">

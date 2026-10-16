@@ -16,9 +16,11 @@ export default defineConfig({
     locale: "es-MX",
   },
   projects: [
-    { name: "desktop", testIgnore: /12-cloudnumbering/, use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } } },
-    { name: "mobile", testIgnore: /12-cloudnumbering/, use: { ...devices["Pixel 7"] } },
+    { name: "desktop", testIgnore: /12-cloudnumbering|checkout-number-stock/, use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } } },
+    { name: "mobile", testIgnore: /12-cloudnumbering|checkout-number-stock/, use: { ...devices["Pixel 7"] } },
     // Agota el inventario de números: corre al final, cuando ya no hay otras pruebas en paralelo.
     { name: "provisioning", testMatch: /12-cloudnumbering/, dependencies: ["desktop", "mobile"], use: { ...devices["Desktop Chrome"] } },
+    // Checkout con número sin inventario (deja cloudnumbering sin saldo un momento): después de "provisioning".
+    { name: "number-stock", testMatch: /checkout-number-stock/, dependencies: ["provisioning"], use: { ...devices["Desktop Chrome"] } },
   ],
 });

@@ -4,7 +4,7 @@ import { flushEvents, logEvent } from "@/lib/analytics/funnel-client";
 import { track } from "@/lib/analytics/track";
 
 /** Landing picker micro-funnel (first-party, → /api/events). */
-export type FunnelEvent = "plan_select" | "buy_click" | "checkout_redirect" | "buy_error";
+export type FunnelEvent = "plan_select" | "email_focus" | "addon_toggle" | "buy_click" | "checkout_redirect" | "buy_error";
 
 export function funnel(event: FunnelEvent, props: Record<string, string | number | boolean | undefined>) {
   logEvent(event, props);

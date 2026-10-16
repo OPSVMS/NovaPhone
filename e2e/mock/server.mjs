@@ -25,6 +25,8 @@ async function sendNcCallback(dep, opts = {}) {
 const cnEndpoints = [];
 const cnNumbers = [];
 let cnSeq = 100;
+// Saldo de la cuenta (GBP). En 0 la cuenta no puede comprar números (POST /orders falla) → prueba "sin inventario".
+let cnBalance = 300;
 function cnHandle(req, url, raw) {
   const p = url.pathname.replace("/cn/v1.1", "");
   const auth = req.headers.authorization;
@@ -34,7 +36,7 @@ function cnHandle(req, url, raw) {
   }
   if (auth !== "Bearer cn-token") return [401, { success: false, error: "unauthorized" }];
   const body = raw ? JSON.parse(raw) : {};
-  if (p === "/organisation") return [200, { success: true, result: { balance: 300, currency: "GBP" } }];
+  if (p === "/organisation") return [200, { success: true, result: { balance: cnBalance, currency: "GBP" } }];
   if (p === "/endpoints" && req.method === "GET") return [200, { success: true, result: { entries: cnEndpoints } }];
   if (p === "/endpoints" && req.method === "POST") { const e = { sid: `EP${cnSeq++}`, ...body }; cnEndpoints.push(e); return [200, { success: true, result: { sid: e.sid } }]; }
   if (p === "/number-groups") return [200, { success: true, result: { entries: [{ sid: "NGGB", countryIso: "GB", numberType: "LOCAL" }] } }];
@@ -42,6 +44,7 @@ function cnHandle(req, url, raw) {
   if (p === "/orders/preview") return [200, { success: true, result: { totalCost: 1.99 * body.amount, currency: "GBP", quoteToken: "q-123" } }];
   if (p === "/orders" && req.method === "POST") {
     if (body.quoteToken !== "q-123" || !req.headers["idempotency-key"]) return [400, { success: false, error: "bad order" }];
+    if (cnBalance <= 0) return [402, { success: false, error: "insufficient balance" }];
     const numbers = Array.from({ length: body.amount }, () => { const n = { sid: `AN${cnSeq++}`, number: `+447428${String(500000 + cnSeq).padStart(6, "0")}`, countryIso: "GB", smsEndpointSid: "" }; cnNumbers.push(n); return { sid: n.sid, number: n.number }; });
     return [200, { success: true, result: { sid: `NO${cnSeq++}`, numbers } }];
   }
@@ -308,6 +311,11 @@ http.createServer((req, res) => {
     // Stripe API + checkout alojado + webhooks firmados
     if (url.pathname.startsWith("/stripe/") || url.pathname.startsWith("/__test/stripe/")) return stripeHandle(req, res, url, raw);
     if (url.pathname === "/__test/cn/numbers") return res.end(JSON.stringify({ numbers: cnNumbers, endpoints: cnEndpoints }));
+    if (url.pathname === "/__test/cn/state") {
+      const b = JSON.parse(raw || "{}");
+      if (typeof b.balance === "number") cnBalance = b.balance;
+      return res.end(JSON.stringify({ balance: cnBalance }));
+    }
     // NOVACORE API
     if (url.pathname === "/api/integrations/clabes" && req.method === "POST") {
       if (!verifyNc(req, raw)) { res.statusCode = 401; return res.end(JSON.stringify({ error: "invalid signature" })); }

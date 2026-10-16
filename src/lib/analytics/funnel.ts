@@ -15,6 +15,8 @@ export const CLIENT_FUNNEL_EVENTS = [
   // Pasos del embudo (solo registro propio).
   "page_view",
   "plan_select",
+  "email_focus",
+  "addon_toggle",
   "buy_click",
   "checkout_redirect",
   "buy_error",

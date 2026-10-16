@@ -4,6 +4,7 @@ import { FaqSection } from "@/components/marketing/faq-section";
 import { HowItWorks } from "@/components/marketing/how-it-works";
 import { PlanPicker } from "@/components/marketing/plan-picker";
 import { RECOMMENDED_PLAN_ID, getMarketingPlans } from "@/components/marketing/plans-data";
+import { NUMBER_PRICE_MXN } from "@/lib/numbers";
 
 export const revalidate = 3600;
 
@@ -28,7 +29,7 @@ export default async function PlanesPage() {
             <p className="text-[17px] leading-relaxed text-muted">Red Telcel 5G. Sin contrato. Precios en pesos con IVA.</p>
           </div>
           <div className="rounded-panel border border-border bg-surface p-4 shadow-raised sm:p-6">
-            <PlanPicker plans={plans} recommendedId={RECOMMENDED_PLAN_ID} />
+            <PlanPicker plans={plans} recommendedId={RECOMMENDED_PLAN_ID} numberPriceMxn={NUMBER_PRICE_MXN()} />
           </div>
         </Container>
       </section>

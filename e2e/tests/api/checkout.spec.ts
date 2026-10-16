@@ -23,19 +23,42 @@ type Checkout = {
   deposit_id: string | null;
   flag_reason: string | null;
   promotion_code: string | null;
+  email: string | null;
+  number_cents: number;
+  number_status: string | null;
+  number_id: string | null;
+  refunded_cents: number;
 };
 const checkoutById = async (id: string) => (await dbQuery<Checkout>("select * from card_checkouts where id = $1", [id]))[0];
 
-/** Inicia el checkout como lo haría la página de planes (mismas cookies que el navegador). */
-async function startCheckout(page: Page, planId = "MX_5_30") {
-  const res = await page.request.post("/api/checkout", { data: { planId } });
+type StripeSession = {
+  id: string;
+  customer_email: string | null;
+  customer_creation: string;
+  allow_promotion_codes: string;
+  currency: string;
+  amount_total: number;
+  success_url: string;
+  cancel_url: string;
+  line_items: { price_data: { unit_amount: string; product_data: { name: string } } }[];
+};
+const stripeSession = async (sessionId: string) =>
+  ((await fetch(`${MOCK()}/__test/stripe/sessions`).then((r) => r.json())) as StripeSession[]).find((s) => s.id === sessionId)!;
+
+/**
+ * Inicia el checkout como lo haría la página de planes (mismas cookies que el navegador).
+ * `email: null` → sin correo (solo válido con sesión iniciada).
+ */
+async function startCheckout(page: Page, planId = "MX_5_30", opts: { email?: string | null; addNumber?: boolean } = {}) {
+  const email = opts.email === undefined ? uniqueEmail("tarjeta") : opts.email;
+  const res = await page.request.post("/api/checkout", { data: { planId, ...(email !== null ? { email } : {}), ...(opts.addNumber ? { addNumber: true } : {}) } });
   expect(res.status(), await res.text()).toBe(200);
   const { url } = (await res.json()) as { url: string };
   expect(url).toMatch(/\/stripe\/pay\/cs_test_/);
   const sessionId = url.split("/").pop()!;
   const [row] = await dbQuery<Checkout>("select * from card_checkouts where payment_ref = $1", [sessionId]);
   expect(row.status).toBe("pending");
-  return { url, sessionId, checkout: row };
+  return { url, sessionId, checkout: row, email, session: await stripeSession(sessionId) };
 }
 
 test.describe("Compra directa con tarjeta (Stripe)", () => {
@@ -62,24 +85,28 @@ test.describe("Compra directa con tarjeta (Stripe)", () => {
     // Eventos del servidor no se aceptan del cliente.
     expect((await page.request.post("/api/events", { data: [{ event: "paid", path: "/" }] })).status()).toBe(400);
 
-    const { url, checkout } = await startCheckout(page);
-    expect(checkout.user_id).toBeNull();
+    // El correo se pide antes de pagar (mayúsculas y espacios se normalizan): la cuenta se crea ya, sin verificar.
+    const { url, checkout, session } = await startCheckout(page, "MX_5_30", { email: `  ${email.toUpperCase()} ` });
+    const [early] = await dbQuery<{ id: string; email_verified_at: string | null }>("select id, email_verified_at from users where email = $1", [email]);
+    expect(early.email_verified_at).toBeNull();
+    expect(checkout.user_id).toBe(early.id);
+    expect(checkout.email).toBe(email);
     expect(checkout.attribution?.gclid).toBe(gclid);
     expect(checkout.attribution?.utm_campaign).toBe(campaign);
 
-    // Stripe Checkout: sin correo previo, MXN, código promocional permitido.
-    const [session] = (await fetch(`${MOCK()}/__test/stripe/sessions`).then((r) => r.json())).filter((s: { id: string }) => url.endsWith(s.id));
-    expect(session.customer_email).toBeNull();
+    // Stripe Checkout: correo prellenado, MXN, código promocional permitido, una sola línea.
+    expect(session.customer_email).toBe(email);
     expect(session.customer_creation).toBe("if_required");
     expect(session.allow_promotion_codes).toBe("true");
     expect(session.currency).toBe("mxn");
+    expect(session.line_items).toHaveLength(1);
     expect(Number(session.line_items[0].price_data.unit_amount)).toBe(18900);
     expect(session.success_url).toMatch(new RegExp(`/compra/${checkout.id}\\?t=`));
     expect(session.cancel_url).toMatch(/\/planes\?plan=MX_5_30&cancelled=1$/);
 
     await page.goto(url);
     await expect(page.locator("#total")).toHaveText("Total: $189.00 MXN");
-    await page.locator("#checkout-email").fill(email);
+    await expect(page.locator("#email")).toHaveText(email);
     await page.locator("#pay").click();
     await page.waitForURL(new RegExp(`/compra/${checkout.id}\\?t=`));
 
@@ -130,7 +157,7 @@ test.describe("Compra directa con tarjeta (Stripe)", () => {
     const api = await page.request.get(`/api/orders/${checkout.id}?t=${checkout.access_token}`);
     expect(api.status()).toBe(200);
     const view = await api.json();
-    expect(view).toMatchObject({ id: checkout.id, status: "ready", email, newAccount: true, paidMxn: 189, currency: "MXN", emailSent: true });
+    expect(view).toMatchObject({ id: checkout.id, status: "ready", email, newAccount: true, paidMxn: 189, currency: "MXN", emailSent: true, number: null, numberRefund: null });
     expect(view.purchase).toMatchObject({ transactionId: checkout.id, value: 189, currency: "MXN" });
     expect(view.esim.qrUrl).toMatch(new RegExp(`^/api/qr/${checkout.id}\\?sig=`));
     expect((await page.request.get(`/api/orders/${checkout.id}?t=nope`)).status()).toBe(404);
@@ -173,7 +200,9 @@ test.describe("Compra directa con tarjeta (Stripe)", () => {
   test("con sesión: correo prellenado, la eSIM queda en su cuenta; código promocional", async ({ page }) => {
     test.setTimeout(120_000);
     await register(page);
-    const { url, checkout } = await startCheckout(page, "MX_20_30");
+    // Con sesión el correo es opcional: manda la cuenta de la sesión.
+    const { url, checkout, session } = await startCheckout(page, "MX_20_30", { email: null });
+    expect(session.customer_email).toBe(emailOf(page));
     const [{ id: userId }] = await dbQuery<{ id: string }>("select id from users where email = $1", [emailOf(page)]);
     expect(checkout.user_id).toBe(userId);
     const paid = await mock("/__test/stripe/pay", { referenceId: checkout.id, promo: "NOVA10" });
@@ -274,5 +303,79 @@ test.describe("Compra directa con tarjeta (Stripe)", () => {
     await expect(page.getByText("Stripe · compra eSIM").filter({ visible: true }).first()).toBeVisible();
     await page.goto("/admin/esims");
     await expect(page.getByText("Tarjeta", { exact: true }).filter({ visible: true }).first()).toBeVisible();
+  });
+
+  test("correo obligatorio: sin correo o inválido → invalid_email, sin orden ni cuenta", async ({ request }) => {
+    for (const email of [undefined, "", "   ", "no-es-correo", "a@b", `${"x".repeat(250)}@novaphone.test`]) {
+      const res = await request.post("/api/checkout", { data: { planId: "MX_5_30", ...(email !== undefined ? { email } : {}) } });
+      expect(res.status(), String(email)).toBe(400);
+      expect(await res.json()).toMatchObject({ code: "invalid_email", error: expect.any(String) });
+    }
+    expect(await dbQuery("select id from users where email in ('no-es-correo', 'a@b')")).toHaveLength(0);
+    // Cuenta suspendida: no se inicia el pago.
+    const email = uniqueEmail("suspendida");
+    await dbQuery("insert into users (email, name, password_hash, disabled_at) values ($1, 'S', 'x', now())", [email]);
+    const res = await request.post("/api/checkout", { data: { planId: "MX_5_30", email } });
+    expect(res.status()).toBe(403);
+    expect((await res.json()).code).toBe("account_disabled");
+  });
+
+  test("addNumber: cobra 599 + 79, asigna el número con el monedero y lo muestra en la página de éxito", async ({ page }) => {
+    test.setTimeout(120_000);
+    // Inventario propio para esta prueba (si otra lo toma antes, cloudnumbering del simulador compra uno al momento).
+    await dbQuery("insert into phone_numbers (e164, country, provider) values ($1, 'GB', 'cloudnumbering') on conflict do nothing", [
+      `+44741${String(Math.floor(Math.random() * 1e7)).padStart(7, "0")}`,
+    ]);
+    const { checkout, session, email } = await startCheckout(page, "MX_20_30", { addNumber: true });
+    expect(checkout).toMatchObject({ number_cents: 7900, number_status: "pending", number_id: null });
+    expect(session.customer_email).toBe(email);
+    expect(session.line_items.map((l) => [l.price_data.product_data.name, Number(l.price_data.unit_amount)])).toEqual([
+      ["eSIM NovaPhone · México 20 GB · 30 días", 59900],
+      ["Número para recibir códigos · 30 días", 7900],
+    ]);
+    expect(session.amount_total).toBe(67800);
+
+    const paid = await mock("/__test/stripe/pay", { referenceId: checkout.id });
+    expect(paid.events[0].json.result).toBe("order-placed");
+    const row = await checkoutById(checkout.id);
+    expect(row).toMatchObject({ status: "fulfilled", amount_paid_cents: 67800, number_status: "assigned", refunded_cents: 0 });
+    const [number] = await dbQuery<{ id: string; e164: string; status: string; user_id: string; order_id: string; monthly_price_cents: number }>(
+      "select * from phone_numbers where id = $1",
+      [row.number_id],
+    );
+    expect(number).toMatchObject({ status: "assigned", user_id: row.user_id, order_id: checkout.id, monthly_price_cents: 7900 });
+
+    // Contabilidad: un solo depósito por el total; eSIM y número salen del saldo por sus caminos normales; saldo neto 0.
+    const [order] = await dbQuery<{ price_cents: number }>("select price_cents from orders where id = $1", [checkout.id]);
+    expect(order.price_cents).toBe(59900);
+    const deps = await dbQuery<{ amount_cents: number; meta: { numberCents: number } }>("select * from deposits where user_id = $1", [row.user_id]);
+    expect(deps.map((d) => [d.amount_cents, d.meta.numberCents])).toEqual([[67800, 7900]]);
+    const ledger = await dbQuery<{ amount_cents: number; kind: string; description: string; balance_after_cents: number }>("select * from ledger where user_id = $1 order by created_at", [row.user_id]);
+    expect(ledger.map((l) => [l.kind, l.amount_cents, l.balance_after_cents])).toEqual([
+      ["deposit", 67800, 67800],
+      ["purchase", -59900, 7900],
+      ["purchase", -7900, 0],
+    ]);
+    expect(ledger[2].description).toBe(`Número NovaPhone ${number.e164}`);
+    expect((await dbQuery<{ balance_cents: number }>("select balance_cents from users where id = $1", [row.user_id]))[0].balance_cents).toBe(0);
+    const refunds = (await fetch(`${MOCK()}/__test/stripe/refunds`).then((r) => r.json())) as { payment_intent: string }[];
+    expect(refunds.filter((r) => r.payment_intent === row.payment_intent_id)).toHaveLength(0);
+
+    const view = await (await page.request.get(`/api/orders/${checkout.id}?t=${checkout.access_token}`)).json();
+    expect(view).toMatchObject({ paidMxn: 678, number: { e164: number.e164 }, numberRefund: null });
+    expect(view.purchase.items).toEqual([
+      { id: "MX_20_30", name: "México 20 GB · 30 días", price: 599 },
+      { id: "NUMBER_30", name: "Número para recibir códigos · 30 días", price: 79 },
+    ]);
+    await page.goto(`/compra/${checkout.id}?t=${checkout.access_token}`);
+    await expect(page.getByTestId("order-number-e164")).toHaveText(number.e164);
+    await expect(page.getByTestId("order-number")).toContainText("los mensajes llegan a tu panel");
+    await expect(page.getByTestId("total-paid")).toHaveText("$678");
+
+    // Ya tiene número: otro checkout con addNumber lo ignora y no lo cobra.
+    const again = await startCheckout(page, "MX_5_30", { email, addNumber: true });
+    expect(again.checkout).toMatchObject({ user_id: row.user_id, number_cents: 0, number_status: null });
+    expect(again.session.line_items).toHaveLength(1);
+    expect(again.session.amount_total).toBe(18900);
   });
 });

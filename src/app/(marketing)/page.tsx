@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
+import { AccountBenefits } from "@/components/marketing/account-benefits";
 import { FaqSection } from "@/components/marketing/faq-section";
 import { Hero } from "@/components/marketing/hero";
 import { HowItWorks } from "@/components/marketing/how-it-works";
 import { LandingJsonLd } from "@/components/marketing/json-ld";
-import { NumberAddon } from "@/components/marketing/number-section";
 import { formatMxn } from "@/components/marketing/format";
 import { RECOMMENDED_PLAN_ID, getMarketingPlans } from "@/components/marketing/plans-data";
 import { NUMBER_PRICE_MXN } from "@/lib/numbers";
@@ -31,9 +31,9 @@ export default async function HomePage() {
   const plans = await getMarketingPlans();
   return (
     <>
-      <Hero plans={plans} />
+      <Hero plans={plans} numberPriceMxn={NUMBER_PRICE_MXN()} />
       <HowItWorks />
-      <NumberAddon priceMxn={NUMBER_PRICE_MXN()} />
+      <AccountBenefits />
       <FaqSection />
       <LandingJsonLd plans={plans} baseUrl={process.env.APP_URL || undefined} />
     </>

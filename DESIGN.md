@@ -275,13 +275,16 @@ import { Stagger, StaggerItem } from "@/components/motion/stagger";  // client
 
 ## Landing (home = sales page)
 
-Mobile-first, under 5 screens, in this order: **Hero + plan picker** (`hero.tsx`, `plan-picker.tsx`) → **Cómo funciona** (3 steps) → optional **+44 number** one-liner → **4 FAQs** + WhatsApp → footer (MASMOVIL S.A. de C.V., Guadalajara).
+Mobile-first, under 5 screens, in this order: **Hero + plan picker** (`hero.tsx`, `plan-picker.tsx`) → **Cómo funciona** (3 steps) → **Lo que incluye tu cuenta** (`account-benefits.tsx`: 6 compact true claims, 2 columns on phones, + "Elegir mi plan" back to `#elegir-plan`) → **FAQs** + WhatsApp → footer (MASMOVIL S.A. de C.V., Guadalajara).
+
+- **Number copy:** never say "+44" or "Reino Unido" in marketing. It is the "número para recibir códigos de verificación (SMS y llamadas)"; only the "?" tooltip may call it "un número móvil internacional". Never claim "varios números" (one per account) or "100 eSIMs".
 
 - Picker: **every** marketed plan visible at once (`MARKETED_PLAN_IDS` in `plans-data.ts`: 1 GB/7 d, 3 GB/15 d, 3 GB/30 d, 5, 10, 20 GB/30 d; 50 GB is not marketed), cheapest first, as compact one-line rows ("1 GB · 7 días" left, "$39 MXN" + tiny "$39/GB" right) so all six fit in about one phone screen. **20 GB "Recomendado"** is last and preselected; 1 GB/7 d carries a "Para probar" badge, and the note under the list reads "¿Primera vez? Prueba con 1 GB por $39 y recarga después desde tu panel." (tapping it selects 1 GB). Mexican buyers want to try cheap first (director decision 2026-10-16).
-- Buy button "Comprar ahora — $599 MXN" → server action `startCardCheckout({ planId })` → Stripe (Stripe collects the email; no email step on our page). Guarantee line and payment row right under the button; secondary link "Pagar con SPEI / ya tengo cuenta" → `/app/comprar?plan=…`.
+- Under the list: required email field "Correo para tu cuenta y tu QR" (validated client-side; the server's `invalid_email` shows on the field), then the add-on line, a checkbox "Añadir número para recibir códigos (+$79 MXN / 30 días)" with a "?" tooltip, which adds $79 to the button total.
+- Buy button "Comprar ahora — $599 MXN" (or "$678 MXN" with the number) → server action `startCardCheckout({ planId, email, addNumber })` → Stripe. Guarantee line and payment row right under the button; secondary link "Pagar con SPEI / ya tengo cuenta" → `/app/comprar?plan=…`.
 - Mobile sticky bar (WhatsApp + "Comprar ahora — $X MXN") hides while any part of the plan list or the in-page buy button is on screen, so it never covers a plan.
-- Mobile budget (390×844): hero + picker + buy button within one scroll (today the button sits at the bottom of the first screen). Keep the hero copy compact.
-- Funnel events: `plan_select`, `buy_click`, `checkout_redirect`, `buy_error` (+ GA4 `view_item_list`, `select_item`, `begin_checkout`) via `src/components/marketing/funnel.ts`.
+- Mobile budget (390×844): hero + picker + buy button within one scroll (the six plans fit on the first screen; email, add-on and button follow right after). Keep the hero copy compact.
+- Funnel events: `plan_select`, `email_focus` (first focus), `addon_toggle`, `buy_click`, `checkout_redirect`, `buy_error` (incl. client `email_missing` / `email_invalid`) (+ GA4 `view_item_list`, `select_item`, `begin_checkout`) via `src/components/marketing/funnel.ts`.
 - `/planes` renders the same picker with every plan visible. `/reembolsos` holds the 30-day refund + connection guarantee.
 - JSON-LD: Organization + Product/AggregateOffer (`json-ld.tsx`) and FAQPage (`faq-section.tsx`).
 

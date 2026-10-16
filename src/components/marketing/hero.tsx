@@ -23,7 +23,7 @@ const facts = [
  * Mobile (390px): compact copy on top, picker right under it, so the buy button is one scroll away.
  * Desktop: copy left, picker card right.
  */
-export function Hero({ plans }: { plans: MarketingPlan[] }) {
+export function Hero({ plans, numberPriceMxn }: { plans: MarketingPlan[]; numberPriceMxn?: number }) {
   const rec = plans.find((p) => p.id === RECOMMENDED_PLAN_ID);
   return (
     <section id="planes" aria-labelledby="hero-titulo" className="relative isolate scroll-mt-16 overflow-hidden">
@@ -77,8 +77,8 @@ export function Hero({ plans }: { plans: MarketingPlan[] }) {
           </ul>
         </div>
 
-        <div className="rounded-panel border border-border bg-surface px-3.5 pb-4 pt-3.5 shadow-raised sm:p-6">
-          <PlanPicker plans={plans} recommendedId={RECOMMENDED_PLAN_ID} />
+        <div id="elegir-plan" className="scroll-mt-20 rounded-panel border border-border bg-surface px-3.5 pb-4 pt-3.5 shadow-raised sm:p-6">
+          <PlanPicker plans={plans} recommendedId={RECOMMENDED_PLAN_ID} numberPriceMxn={numberPriceMxn} />
         </div>
       </Container>
     </section>

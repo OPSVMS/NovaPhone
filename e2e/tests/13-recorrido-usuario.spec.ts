@@ -25,7 +25,7 @@ test("recorrido completo del usuario sin errores", async ({ page, request }, tes
 
   // 1. Landing (incluye la oferta del número) y registro desde el CTA.
   await page.goto("/");
-  await expect(page.getByText(/Tu número para verificar apps/).first()).toBeVisible();
+  await expect(page.getByText(/Número para códigos por SMS o llamada/).first()).toBeVisible();
   await snap("landing");
   await page.getByRole("link", { name: /Crear cuenta/ }).filter({ visible: true }).first().click();
   await expect(page).toHaveURL(/\/registro/);

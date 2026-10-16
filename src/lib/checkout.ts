@@ -11,6 +11,7 @@ import { getPaymentProvider, type CheckoutSession } from "./payments";
 import { EsimAccessError, orderEsim } from "./esimaccess";
 import { adjustBalance } from "./wallet";
 import { completeDeposit, MIN_DEPOSIT_MXN } from "./deposits";
+import { assignNumber, canSellNumber, getUserNumber, NUMBER_PRICE_MXN } from "./numbers";
 import { androidInstallUrl, appleInstallUrl, failAndRefund, pollOrder, refreshOrder } from "./orders";
 import { signValue } from "./sign";
 import { readAttribution, type Attribution } from "./analytics/attribution";
@@ -48,14 +49,21 @@ export function tokenMatches(c: Pick<CardCheckout, "accessToken">, token: string
 export type StartCardCheckoutInput = {
   planId: string;
   /**
-   * Reservado. El número +44 NO se cobra en el checkout con tarjeta: se contrata desde la cuenta con saldo
-   * ($79 / 30 días), como hoy. Se acepta para no romper llamadas, pero se ignora.
+   * Correo del comprador (obligatorio sin sesión). Se normaliza (trim + minúsculas), se busca o crea la cuenta
+   * (sin verificar, sin contraseña) y se prellena en Stripe Checkout. Con sesión iniciada manda la cuenta de la sesión.
+   */
+  email: string;
+  /**
+   * Agrega "Número para recibir códigos · 30 días" (MXN 79) como segunda línea. Se ignora sin cobrar si no hay
+   * números que vender o si la cuenta ya tiene uno.
    */
   addNumber?: boolean;
 };
 
-export type StartCardCheckoutError = "payments_disabled" | "unavailable" | "account_disabled" | "provider_error";
+export type StartCardCheckoutError = "payments_disabled" | "unavailable" | "invalid_email" | "account_disabled" | "provider_error";
 export type StartCardCheckoutResult = { url: string } | { error: string; code: StartCardCheckoutError };
+
+export const NUMBER_LINE_NAME = "Número para recibir códigos · 30 días";
 
 /** Implementación de la server action `startCardCheckout` y de `POST /api/checkout`. */
 export async function startCardCheckout(input: StartCardCheckoutInput, sessionUser?: { id: string; email: string } | null): Promise<StartCardCheckoutResult> {
@@ -64,49 +72,65 @@ export async function startCardCheckout(input: StartCardCheckoutInput, sessionUs
   const plan = typeof input.planId === "string" && input.planId.length <= 64 ? await getPlan(input.planId) : undefined;
   if (!plan) return { error: "Ese plan ya no está disponible.", code: "unavailable" };
 
-  let user: { id: string; email: string } | null = null;
+  let session: { id: string; email: string; disabledAt: Date | null } | undefined;
   if (sessionUser) {
-    const row = await db.query.users.findFirst({ where: eq(schema.users.id, sessionUser.id), columns: { id: true, email: true, disabledAt: true } });
-    if (row?.disabledAt) return { error: "Tu cuenta está suspendida. Escríbenos a hola@novaphone.lat.", code: "account_disabled" };
-    if (row) user = { id: row.id, email: row.email };
+    session = await db.query.users.findFirst({ where: eq(schema.users.id, sessionUser.id), columns: { id: true, email: true, disabledAt: true } });
   }
+  const email = session ? session.email : normalizeEmail(typeof input.email === "string" ? input.email : null);
+  if (!email) return { error: "Escribe un correo válido para enviarte tu eSIM.", code: "invalid_email" };
+  if (session?.disabledAt) return { error: "Tu cuenta está suspendida. Escríbenos a hola@novaphone.lat.", code: "account_disabled" };
 
   try {
+    // Cuenta desde antes de pagar: la orden pendiente ya queda ligada y Stripe recibe el correo prellenado.
+    const user = session ?? (await findOrCreateBuyer(email));
+    if (user.disabledAt) return { error: "Tu cuenta está suspendida. Escríbenos a hola@novaphone.lat.", code: "account_disabled" };
+
+    const priceCents = plan.priceMxn * 100;
+    const numberCents = input.addNumber && !(await getUserNumber(user.id)) && (await canSellNumber()) ? NUMBER_PRICE_MXN() * 100 : 0;
     const attribution = (await readAttribution()) as Record<string, unknown> | null;
     const [checkout] = await db
       .insert(schema.cardCheckouts)
       .values({
-        userId: user?.id ?? null,
+        userId: user.id,
+        email: user.email,
         planId: plan.id,
         planName: plan.name,
-        priceCents: plan.priceMxn * 100,
+        priceCents,
         costUsd: plan.costUsd,
         accessToken: randomBytes(24).toString("base64url"),
         attribution,
+        numberCents,
+        numberStatus: numberCents > 0 ? "pending" : null,
       })
       .returning();
-    const session = await provider.createCheckout({
+    const stripeSession = await provider.createCheckout({
       kind: "order",
       referenceId: checkout.id,
-      // Invitado: Stripe Checkout pide el correo. Con sesión: se prellena.
-      email: user?.email ?? null,
+      email: user.email,
       lines: [
         {
           name: `eSIM NovaPhone · ${plan.name}`,
           description: `${plan.dataGb} GB por ${plan.days} días en la red Telcel 5G. Llega al instante con QR por correo.`,
-          amountCents: plan.priceMxn * 100,
+          amountCents: priceCents,
         },
+        ...(numberCents > 0
+          ? [{ name: NUMBER_LINE_NAME, description: "Número para recibir SMS de verificación (WhatsApp, bancos, apps). Los mensajes llegan a tu panel NovaPhone.", amountCents: numberCents }]
+          : []),
       ],
       successUrl: successUrl(checkout),
       // La página de planes muestra "no se hizo ningún cargo" con cancelled=1 y preselecciona el plan.
       cancelUrl: `${appUrl()}/planes?plan=${encodeURIComponent(plan.id)}&cancelled=1`,
-      metadata: { checkoutId: checkout.id, planId: plan.id, ...(user ? { userId: user.id } : {}) },
+      metadata: { checkoutId: checkout.id, planId: plan.id, userId: user.id, ...(numberCents > 0 ? { number: "1" } : {}) },
       allowPromotionCodes: process.env.STRIPE_ALLOW_PROMOTION_CODES !== "false",
       expiresInMinutes: 60,
     });
-    await db.update(schema.cardCheckouts).set({ paymentRef: session.id, updatedAt: new Date() }).where(eq(schema.cardCheckouts.id, checkout.id));
-    await logServerEvent({ event: "checkout_started", path: "/planes", props: { plan: plan.id, price: plan.priceMxn, currency: "MXN", logged: !!user } });
-    return { url: session.url };
+    await db.update(schema.cardCheckouts).set({ paymentRef: stripeSession.id, updatedAt: new Date() }).where(eq(schema.cardCheckouts.id, checkout.id));
+    await logServerEvent({
+      event: "checkout_started",
+      path: "/planes",
+      props: { plan: plan.id, price: plan.priceMxn, currency: "MXN", logged: !!session, number: numberCents > 0 },
+    });
+    return { url: stripeSession.url };
   } catch (e) {
     console.error("startCardCheckout", e);
     return { error: "No pudimos iniciar el pago. Intenta de nuevo.", code: "provider_error" };
@@ -166,7 +190,7 @@ async function fulfilCheckout(checkoutId: string, s: CheckoutSession): Promise<s
   }
 
   // 1) Reclamo atómico: solo una llamada concurrente sigue. Un "processing" de más de 5 min (proceso caído a la mitad)
-  //    se puede retomar: los pasos 2–3 son idempotentes y la eSIM se pide hasta después.
+  //    se puede retomar: los pasos 2–4 son idempotentes y la eSIM se pide hasta después.
   const [claimed] = await db
     .update(schema.cardCheckouts)
     .set({ status: "processing", updatedAt: new Date() })
@@ -182,16 +206,20 @@ async function fulfilCheckout(checkoutId: string, s: CheckoutSession): Promise<s
     .returning();
   if (!claimed) return "duplicate";
 
-  const amountCents = s.amountTotal ?? checkout.priceCents;
+  // Total cobrado = eSIM + número (si se agregó). Un código promocional se descuenta de la eSIM; el número siempre vale su precio.
+  const amountCents = s.amountTotal ?? checkout.priceCents + checkout.numberCents;
+  const numberCents = Math.min(checkout.numberCents, amountCents);
+  const esimCents = amountCents - numberCents;
   let order: Order;
   let userId: string;
   try {
-    // 2) Cuenta: la de la sesión al iniciar o la del correo que capturó Stripe.
+    // 2) Cuenta: la ligada al iniciar (correo obligatorio) o, en órdenes viejas, la del correo que capturó Stripe.
     const email = normalizeEmail(s.email);
     if (!checkout.userId && !email) throw new Error("paid checkout without email");
     userId = checkout.userId ?? (await findOrCreateBuyer(email!, s.name)).id;
 
-    // 3) Dinero + orden en una sola sentencia (atómica e idempotente por external_id y por el id de la orden).
+    // 3) Dinero + orden en una sola sentencia (atómica e idempotente por external_id y por el id de la orden):
+    //    abono del total, cargo de la eSIM; lo del número queda en el saldo para el paso 4.
     const depositId = randomUUID();
     const reference = `S${Date.now().toString().slice(-9)}${randomInt(100, 999)}`;
     const meta = {
@@ -200,8 +228,9 @@ async function fulfilCheckout(checkoutId: string, s: CheckoutSession): Promise<s
       checkoutId: checkout.id,
       sessionId: s.id,
       paymentIntentId: s.paymentIntentId,
-      listPriceCents: checkout.priceCents,
+      listPriceCents: checkout.priceCents + checkout.numberCents,
       chargedCents: amountCents,
+      numberCents,
       promotionCode: s.promotionCode,
       discountCents: s.discountAmount,
       receiptUrl: s.receiptUrl,
@@ -218,7 +247,7 @@ async function fulfilCheckout(checkoutId: string, s: CheckoutSession): Promise<s
       ),
       ord as (
         insert into orders (id, user_id, plan_id, plan_name, price_cents, cost_usd)
-        select ${checkout.id}::uuid, ${userId}::uuid, ${checkout.planId}, ${checkout.planName}, ${amountCents}::int, ${checkout.costUsd}::numeric
+        select ${checkout.id}::uuid, ${userId}::uuid, ${checkout.planId}, ${checkout.planName}, ${esimCents}::int, ${checkout.costUsd}::numeric
         where exists (select 1 from dep)
         on conflict do nothing
         returning id
@@ -231,9 +260,14 @@ async function fulfilCheckout(checkoutId: string, s: CheckoutSession): Promise<s
       ),
       debit as (
         insert into ledger (user_id, amount_cents, kind, ref_id, description, balance_after_cents, created_at)
-        select ${userId}::uuid, ${-amountCents}::int, 'purchase', ${checkout.id}, ${`eSIM ${checkout.planName}`}, bal.balance_cents, now() + interval '1 millisecond'
+        select ${userId}::uuid, ${-esimCents}::int, 'purchase', ${checkout.id}, ${`eSIM ${checkout.planName}`}, bal.balance_cents + ${numberCents}::int, now() + interval '1 millisecond'
         from bal
         where exists (select 1 from ord)
+        returning id
+      ),
+      held as (
+        update users set balance_cents = balance_cents + ${numberCents}::int
+        where id = ${userId}::uuid and ${numberCents}::int <> 0 and exists (select 1 from ord) and exists (select 1 from bal)
         returning id
       )
       select (select id from dep) as deposit_id, (select id from ord) as order_id
@@ -245,6 +279,9 @@ async function fulfilCheckout(checkoutId: string, s: CheckoutSession): Promise<s
     const found = await db.query.orders.findFirst({ where: eq(schema.orders.id, checkout.id) });
     if (!found) throw new Error("order row missing after payment");
     order = found;
+
+    // 4) Número: se paga con el saldo por el camino normal (cargo "Número NovaPhone …" en el ledger). Sin número → $79 a la tarjeta.
+    if (numberCents > 0) await fulfilNumber(claimed, order, userId, s, numberCents);
 
     await db
       .update(schema.cardCheckouts)
@@ -267,30 +304,95 @@ async function fulfilCheckout(checkoutId: string, s: CheckoutSession): Promise<s
       })
       .where(eq(schema.cardCheckouts.id, checkout.id));
   } catch (e) {
-    // Nada se cobró en nuestro lado todavía: libera el reclamo para que Stripe reintente el webhook.
+    // Todo lo anterior es idempotente: libera el reclamo para que Stripe reintente el webhook.
     await db.update(schema.cardCheckouts).set({ status: "pending", error: e instanceof Error ? e.message.slice(0, 300) : "error", updatedAt: new Date() }).where(eq(schema.cardCheckouts.id, checkout.id));
     throw e;
   }
 
   const attribution = (checkout.attribution ?? null) as Attribution | null;
   await logServerEvent(
-    { event: "paid", path: null, props: { plan: checkout.planId, total: amountCents / 100, currency: "MXN", promo: !!s.promotionCode } },
+    { event: "paid", path: null, props: { plan: checkout.planId, total: amountCents / 100, currency: "MXN", promo: !!s.promotionCode, number: numberCents > 0 } },
     adsFrom(attribution),
   );
 
-  // 4) eSIM: mismo proveedor y transactionId (= id de la orden) que la compra con saldo.
+  // 5) eSIM: mismo proveedor y transactionId (= id de la orden) que la compra con saldo.
   const placed = await placeEsimOrder(order, claimed, s);
   after(async () => {
     await trackServerPurchase({
       orderId: order.id,
       valueMxn: amountCents / 100,
-      items: [{ id: checkout.planId, name: checkout.planName, price: amountCents / 100 }],
+      items: purchaseItems(checkout, amountCents),
       attribution,
       userId,
     });
     if (placed === "placed") await pollOrder(order).catch((e) => console.error("pollOrder", order.id, e));
   });
   return placed === "placed" ? "order-placed" : `order-${placed}`;
+}
+
+/** Líneas para analítica: eSIM (con el descuento) + número, si se cobró. */
+function purchaseItems(c: Pick<CardCheckout, "planId" | "planName" | "numberCents">, paidCents: number) {
+  const numberCents = Math.min(c.numberCents, paidCents);
+  return [
+    { id: c.planId, name: c.planName, price: (paidCents - numberCents) / 100 },
+    ...(numberCents > 0 ? [{ id: "NUMBER_30", name: NUMBER_LINE_NAME, price: numberCents / 100 }] : []),
+  ];
+}
+
+/**
+ * Asigna el número comprado junto con la eSIM. El dinero ya está en el saldo (paso 3), así que se usa la compra
+ * normal con saldo (`assignNumber`, cargo de $79 en el ledger). Idempotente por `number_status`:
+ * pending → assigned | refunded (reembolso parcial a la tarjeta) | failed (no se pudo reembolsar: queda como saldo).
+ */
+async function fulfilNumber(checkout: CardCheckout, order: Order, userId: string, s: CheckoutSession, numberCents: number) {
+  const current = await db.query.cardCheckouts.findFirst({ where: eq(schema.cardCheckouts.id, checkout.id), columns: { numberStatus: true } });
+  if (current?.numberStatus !== "pending") return;
+  const user = await db.query.users.findFirst({ where: eq(schema.users.id, userId), columns: { id: true, email: true } });
+  if (!user) throw new Error("buyer missing");
+
+  // Retomado tras una caída: el número ya quedó asignado a esta orden.
+  const existing = await db.query.phoneNumbers.findFirst({
+    where: and(eq(schema.phoneNumbers.userId, userId), eq(schema.phoneNumbers.orderId, order.id), eq(schema.phoneNumbers.status, "assigned")),
+  });
+  const res = existing ? ({ ok: true, number: existing } as const) : await assignNumber(user, { orderId: order.id });
+  if (res.ok) {
+    await db
+      .update(schema.cardCheckouts)
+      .set({ numberStatus: "assigned", numberId: res.number.id, updatedAt: new Date() })
+      .where(and(eq(schema.cardCheckouts.id, checkout.id), eq(schema.cardCheckouts.numberStatus, "pending")));
+    return;
+  }
+
+  // Sin número (inventario agotado, ya tenía uno o no alcanzó): se devuelve lo del número a la tarjeta.
+  let refunded = false;
+  const provider = s.paymentIntentId && process.env.AUTO_REFUND_ON_FAILURE !== "false" ? await getPaymentProvider() : null;
+  if (provider && s.paymentIntentId) {
+    try {
+      await provider.refund(s.paymentIntentId, { amountCents: numberCents, reason: `number-unavailable:${order.id}` });
+      refunded = true;
+    } catch (e) {
+      console.error("number refund failed", order.id, e);
+    }
+  }
+  const [marked] = await db
+    .update(schema.cardCheckouts)
+    .set({
+      numberStatus: refunded ? "refunded" : "failed",
+      ...(refunded ? { refundedCents: dsql`greatest(${schema.cardCheckouts.refundedCents}, ${numberCents}::int)` } : {}),
+      updatedAt: new Date(),
+    })
+    .where(and(eq(schema.cardCheckouts.id, checkout.id), eq(schema.cardCheckouts.numberStatus, "pending")))
+    .returning({ id: schema.cardCheckouts.id });
+  if (!marked) return;
+  // Reembolsado: sale del saldo. Si Stripe falló, los $79 se quedan como saldo del cliente y admin lo ve en la bitácora.
+  if (refunded) await adjustBalance({ userId, amountCents: -numberCents, kind: "adjustment", description: "Reembolso a tu tarjeta (número)", refId: order.id, allowNegative: true });
+  await db.insert(schema.adminAudit).values({
+    adminId: null,
+    action: "card_checkout.number_refund",
+    targetType: "order",
+    targetId: order.id,
+    details: { reason: res.code, error: res.error, amountCents: numberCents, refundedToCard: refunded, paymentIntentId: s.paymentIntentId },
+  });
 }
 
 /**
@@ -330,23 +432,36 @@ async function placeEsimOrder(order: Order, checkout: CardCheckout, s: CheckoutS
   }
 }
 
-/** Devuelve el cobro a la tarjeta y retira ese monto del saldo (que acababa de reembolsarse). */
+/**
+ * Devuelve a la tarjeta lo cobrado por la eSIM (solo esa parte: si se compró número, el número se queda) y retira
+ * ese monto del saldo (que acababa de reembolsarse).
+ */
 async function refundToCard(order: Order, checkout: CardCheckout, s: CheckoutSession, reason: string) {
   if (!s.paymentIntentId || process.env.AUTO_REFUND_ON_FAILURE === "false") return false;
+  if (order.priceCents <= 0) return false;
   const provider = await getPaymentProvider();
   if (!provider) return false;
   try {
-    await provider.refund(s.paymentIntentId, { reason: `order-failed:${order.id}` });
+    await provider.refund(s.paymentIntentId, { amountCents: order.priceCents, reason: `order-failed:${order.id}` });
   } catch (e) {
     console.error("card refund failed", order.id, e);
     return false;
   }
   await adjustBalance({ userId: order.userId, amountCents: -order.priceCents, kind: "adjustment", description: "Reembolso a tu tarjeta", refId: order.id, allowNegative: true });
+  const latest = await db.query.cardCheckouts.findFirst({ where: eq(schema.cardCheckouts.id, checkout.id), columns: { numberStatus: true, numberCents: true, depositId: true } });
+  const numberRefunded = latest?.numberStatus === "refunded" ? latest.numberCents : 0;
+  const keepsNumber = latest?.numberStatus === "assigned";
   await db
     .update(schema.cardCheckouts)
-    .set({ refundedCents: order.priceCents, flagReason: `auto-refund: ${reason}`.slice(0, 300), updatedAt: new Date() })
+    .set({
+      refundedCents: dsql`greatest(${schema.cardCheckouts.refundedCents}, ${order.priceCents + numberRefunded}::int)`,
+      flagReason: `auto-refund: ${reason}`.slice(0, 300),
+      updatedAt: new Date(),
+    })
     .where(eq(schema.cardCheckouts.id, checkout.id));
-  if (checkout.depositId) await db.update(schema.deposits).set({ status: "returned" }).where(eq(schema.deposits.id, checkout.depositId));
+  // El depósito solo se marca devuelto si se devolvió todo (sin número que se quede con el cliente).
+  const depositId = latest?.depositId ?? checkout.depositId;
+  if (depositId && !keepsNumber) await db.update(schema.deposits).set({ status: "returned" }).where(eq(schema.deposits.id, depositId));
   return true;
 }
 
@@ -497,9 +612,9 @@ export type OrderForSuccess = {
   /** Id de la orden (= id del checkout). */
   id: string;
   status: OrderForSuccessStatus;
-  /** "" mientras Stripe no confirma el pago (Stripe captura el correo). */
+  /** Correo del comprador (obligatorio al iniciar el checkout). */
   email: string;
-  /** La cuenta se creó con esta compra (sin contraseña: se entra con "Recuperar contraseña"). */
+  /** Cuenta sin reclamar todavía (creada por la compra, nunca ha entrado): se entra con "Crear mi contraseña". */
   newAccount: boolean;
   createdAt: string;
   paidAt: string | null;
@@ -511,6 +626,10 @@ export type OrderForSuccess = {
   promotionCode: string | null;
   /** Ya enviamos el correo con el QR. */
   emailSent: boolean;
+  /** Número para recibir códigos comprado en este checkout (`addNumber`), ya asignado. */
+  number: { e164: string } | null;
+  /** Se pidió número pero no había: lo cobrado por él se devolvió a la tarjeta (`card`) o quedó como saldo (`wallet`). */
+  numberRefund: null | { amountMxn: number; to: "card" | "wallet" };
   esim: null | {
     iccid: string | null;
     activationCode: string;
@@ -545,9 +664,12 @@ export async function getOrderForSuccess(orderId: string, token: string | null |
   let order = checkout.orderId ? await db.query.orders.findFirst({ where: eq(schema.orders.id, checkout.orderId) }) : undefined;
   if (order?.status === "provisioning" && order.providerOrderNo) order = await refreshOrder(order).catch(() => order!);
 
-  const [user, plan] = await Promise.all([
-    checkout.userId ? db.query.users.findFirst({ where: eq(schema.users.id, checkout.userId), columns: { email: true, createdAt: true } }) : Promise.resolve(undefined),
+  const [user, plan, number] = await Promise.all([
+    checkout.userId ? db.query.users.findFirst({ where: eq(schema.users.id, checkout.userId), columns: { email: true, lastSeenAt: true } }) : Promise.resolve(undefined),
     db.query.plans.findFirst({ where: eq(schema.plans.id, checkout.planId), columns: { dataGb: true, days: true } }),
+    checkout.numberId && checkout.numberStatus === "assigned"
+      ? db.query.phoneNumbers.findFirst({ where: eq(schema.phoneNumbers.id, checkout.numberId), columns: { e164: true } })
+      : Promise.resolve(undefined),
   ]);
 
   const status: OrderForSuccessStatus =
@@ -572,7 +694,7 @@ export async function getOrderForSuccess(orderId: string, token: string | null |
     id: checkout.id,
     status,
     email,
-    newAccount: !!user && user.createdAt.getTime() >= checkout.createdAt.getTime(),
+    newAccount: !!user && !user.lastSeenAt,
     createdAt: checkout.createdAt.toISOString(),
     paidAt: checkout.paidAt?.toISOString() ?? null,
     plan: { id: checkout.planId, name: checkout.planName, dataGb: plan?.dataGb ?? null, days: plan?.days ?? null },
@@ -581,6 +703,11 @@ export async function getOrderForSuccess(orderId: string, token: string | null |
     currency: "MXN",
     promotionCode: checkout.promotionCode,
     emailSent: !!order?.emailedAt,
+    number: number ? { e164: number.e164 } : null,
+    numberRefund:
+      checkout.numberStatus === "refunded" || checkout.numberStatus === "failed"
+        ? { amountMxn: checkout.numberCents / 100, to: checkout.numberStatus === "refunded" ? "card" : "wallet" }
+        : null,
     esim: lpa
       ? {
           iccid: order!.iccid,
@@ -600,7 +727,7 @@ export async function getOrderForSuccess(orderId: string, token: string | null |
             value: paidCents / 100,
             currency: "MXN",
             coupon: checkout.promotionCode,
-            items: [{ id: checkout.planId, name: checkout.planName, price: paidCents / 100 }],
+            items: purchaseItems(checkout, paidCents),
           }
         : null,
     links: {

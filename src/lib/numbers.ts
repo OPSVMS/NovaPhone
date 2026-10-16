@@ -31,11 +31,17 @@ export async function getMessages(numberId: string, userId: string, limit = 50) 
   });
 }
 
-/** Hay número disponible (en inventario o comprable al momento en cloudnumbering). */
+/**
+ * Hay número disponible: en inventario o comprable al momento en cloudnumbering (cuenta configurada, que responde
+ * en menos de 5 s y con saldo). Ante la duda regresa false: no se ofrece ni se cobra un número que no podemos dar.
+ */
 export async function canSellNumber() {
   if ((await availableCount()) > 0) return true;
-  const { cloudnumberingEnabled } = await import("./cloudnumbering");
-  return cloudnumberingEnabled();
+  const { cloudnumberingEnabled, getCloudnumberingBalance } = await import("./cloudnumbering");
+  if (!cloudnumberingEnabled()) return false;
+  const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5_000));
+  const balance = await Promise.race([getCloudnumberingBalance().catch((e) => (console.error("cloudnumbering balance", e), null)), timeout]);
+  return !!balance && balance.balance > 0;
 }
 
 export async function availableCount() {

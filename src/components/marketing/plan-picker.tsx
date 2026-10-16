@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import clsx from "clsx";
-import { ArrowRight, BadgeCheck, CircleAlert, Lock, Star } from "lucide-react";
+import { ArrowRight, BadgeCheck, CircleAlert, CircleHelp, Lock, Mail, Star } from "lucide-react";
 import { startCardCheckout } from "@/app/actions/checkout";
 import { Button } from "@/components/ui/button";
 import { formatDays, formatMxn, formatPerGb, formatPesos } from "./format";
@@ -26,15 +26,30 @@ const speiHref = (planId: string) => `/app/comprar?plan=${encodeURIComponent(pla
 /** The cheap "try it first" plan (1 GB / 7 días): badged "Para probar" and named in the note under the list. */
 const TRIAL_PLAN_ID = "MX_1_7";
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const EMAIL_ERROR = "Escribe un correo válido para enviarte tu eSIM.";
+/** Remembered for this tab only, so a cancelled Stripe checkout comes back with the email filled in. */
+const EMAIL_KEY = "np_checkout_email";
+
 /**
  * Landing buy box (the Google Ads destination), deliberately short:
  * every marketed plan as a compact one-line row (cheapest first, recommended 20 GB preselected and last,
- * 1 GB badged "Para probar") → "Comprar ahora" → Stripe Checkout via `startCardCheckout`
- * (Stripe asks for the email; no email step here).
+ * 1 GB badged "Para probar") → email ("Correo para tu cuenta y tu QR", required) → optional number add-on
+ * (checkbox, +$79 MXN / 30 días) → "Comprar ahora — $total" → Stripe Checkout via
+ * `startCardCheckout({ planId, email, addNumber })`.
  * Mobile: sticky "Comprar ahora — $599 MXN" bar, shown only while the plan list and buy button are off screen
  * (so it never covers a plan).
  */
-export function PlanPicker({ plans: catalog, recommendedId }: { plans: PickerPlan[]; recommendedId: string }) {
+export function PlanPicker({
+  plans: catalog,
+  recommendedId,
+  numberPriceMxn,
+}: {
+  plans: PickerPlan[];
+  recommendedId: string;
+  /** Price of the "número para recibir códigos" add-on (30 days); omit to hide the add-on. */
+  numberPriceMxn?: number;
+}) {
   const plans = [...catalog].sort((a, b) => a.dataGb - b.dataGb || a.days - b.days);
   const recommended = plans.find((p) => p.id === recommendedId) ?? plans.find((p) => p.featured) ?? plans.at(-1);
   const trial = plans.find((p) => p.id === TRIAL_PLAN_ID);
@@ -43,7 +58,14 @@ export function PlanPicker({ plans: catalog, recommendedId }: { plans: PickerPla
   const [error, setError] = useState<string | null>(null);
   const [cancelled, setCancelled] = useState(false);
   const [pickerOnScreen, setPickerOnScreen] = useState(false);
+  const [email, setEmail] = useState("");
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [addNumber, setAddNumber] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const emailFocused = useRef(false);
+  const emailRef = useRef<HTMLInputElement>(null);
   const buyRef = useRef<HTMLDivElement>(null);
+  const uid = useId();
   const zoneRef = useRef<HTMLDivElement>(null);
   // The sticky bar is portalled to <body> so no ancestor stacking context (e.g. the hero's `isolate`) can trap it.
   const mounted = useSyncExternalStore(noopSubscribe, () => true, () => false);
@@ -57,6 +79,12 @@ export function PlanPicker({ plans: catalog, recommendedId }: { plans: PickerPla
     /* eslint-disable react-hooks/set-state-in-effect -- one-time hydration from the URL */
     if (fromUrl) setSelectedId(fromUrl.id);
     if (q.get("cancelled") === "1") setCancelled(true);
+    try {
+      const saved = sessionStorage.getItem(EMAIL_KEY);
+      if (saved) setEmail(saved);
+    } catch {
+      // storage blocked: nothing to restore
+    }
     /* eslint-enable react-hooks/set-state-in-effect */
     ga.viewList(plans);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -74,6 +102,9 @@ export function PlanPicker({ plans: catalog, recommendedId }: { plans: PickerPla
 
   if (!selected) return null;
 
+  const addon = typeof numberPriceMxn === "number" && numberPriceMxn > 0 ? numberPriceMxn : null;
+  const total = selected.priceMxn + (addon && addNumber ? addon : 0);
+
   function choose(p: PickerPlan) {
     setSelectedId(p.id);
     setError(null);
@@ -81,15 +112,43 @@ export function PlanPicker({ plans: catalog, recommendedId }: { plans: PickerPla
     ga.select(p);
   }
 
+  function onEmailFocus() {
+    if (emailFocused.current) return;
+    emailFocused.current = true;
+    funnel("email_focus", { plan: selected?.id });
+  }
+
+  function toggleAddon(on: boolean) {
+    setAddNumber(on);
+    funnel("addon_toggle", { on, plan: selected?.id, price: numberPriceMxn });
+  }
+
   async function buy(source: "panel" | "sticky") {
     if (!selected || status === "submitting") return;
     setError(null);
-    funnel("buy_click", { plan: selected.id, price: selected.priceMxn, source });
+    const cleanEmail = email.trim().toLowerCase();
+    if (!EMAIL_RE.test(cleanEmail)) {
+      setEmailError(EMAIL_ERROR);
+      funnel("buy_error", { plan: selected.id, source, code: cleanEmail ? "email_invalid" : "email_missing" });
+      const input = emailRef.current;
+      input?.scrollIntoView({ behavior: "smooth", block: "center" });
+      input?.focus({ preventScroll: true });
+      return;
+    }
+    setEmailError(null);
+    try {
+      sessionStorage.setItem(EMAIL_KEY, cleanEmail);
+    } catch {
+      // storage blocked: fine
+    }
+    const withNumber = !!addon && addNumber;
+    const props = { plan: selected.id, price: selected.priceMxn, addon: withNumber, total, source };
+    funnel("buy_click", props);
     setStatus("submitting");
     try {
-      const res = await startCardCheckout({ planId: selected.id });
+      const res = await startCardCheckout({ planId: selected.id, email: cleanEmail, addNumber: withNumber });
       if (res && "url" in res && res.url) {
-        funnel("checkout_redirect", { plan: selected.id, price: selected.priceMxn, source });
+        funnel("checkout_redirect", props);
         ga.beginCheckout(selected);
         flushFunnel();
         window.location.assign(res.url);
@@ -101,6 +160,12 @@ export function PlanPicker({ plans: catalog, recommendedId }: { plans: PickerPla
         setStatus("soon");
         return;
       }
+      if (code === "invalid_email") {
+        setEmailError(res && "error" in res && res.error ? String(res.error) : EMAIL_ERROR);
+        emailRef.current?.focus();
+        setStatus("idle");
+        return;
+      }
       setError(res && "error" in res && res.error ? String(res.error) : ERROR_MESSAGE);
       setStatus("idle");
     } catch {
@@ -110,7 +175,7 @@ export function PlanPicker({ plans: catalog, recommendedId }: { plans: PickerPla
     }
   }
 
-  const ctaLabel = `Comprar ahora — ${formatMxn(selected.priceMxn)}`;
+  const ctaLabel = `Comprar ahora — ${formatMxn(total)}`;
 
   return (
     <div className="flex flex-col gap-3 sm:gap-4" data-testid="plan-picker">
@@ -217,6 +282,87 @@ export function PlanPicker({ plans: catalog, recommendedId }: { plans: PickerPla
         </div>
 
         <div ref={buyRef} id="comprar" className="flex scroll-mt-24 flex-col gap-3">
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor={`${uid}-email`} className="text-[14px] font-semibold text-fg">
+              Correo para tu cuenta y tu QR
+            </label>
+            <div className="relative">
+              <Mail aria-hidden className="pointer-events-none absolute left-3.5 top-1/2 size-[18px] -translate-y-1/2 text-subtle" />
+              <input
+                ref={emailRef}
+                id={`${uid}-email`}
+                name="email"
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                autoCapitalize="none"
+                spellCheck={false}
+                required
+                placeholder="tu@correo.com"
+                value={email}
+                onFocus={onEmailFocus}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (emailError) setEmailError(null);
+                }}
+                aria-invalid={emailError ? true : undefined}
+                aria-describedby={emailError ? `${uid}-email-error` : undefined}
+                data-testid="email-input"
+                className={clsx(
+                  "h-12 w-full rounded-control border bg-surface pl-11 pr-3.5 text-base text-fg placeholder:text-subtle transition-colors focus:outline-none focus-visible:outline-none focus:ring-4",
+                  emailError ? "border-danger focus:ring-danger/15" : "border-border-strong focus:border-primary focus:ring-ring/20",
+                )}
+              />
+            </div>
+            {emailError ? (
+              <p id={`${uid}-email-error`} role="alert" className="text-[13px] font-medium text-danger" data-testid="email-error">
+                {emailError}
+              </p>
+            ) : null}
+          </div>
+
+          {addon ? (
+            <div className="relative flex items-center gap-2" data-testid="addon-row">
+              <label className="flex min-h-11 min-w-0 flex-1 cursor-pointer items-center gap-2.5 text-[14px] leading-snug text-fg">
+                <input
+                  type="checkbox"
+                  checked={addNumber}
+                  onChange={(e) => toggleAddon(e.target.checked)}
+                  data-testid="addon-checkbox"
+                  className="size-5 shrink-0 cursor-pointer accent-primary"
+                />
+                <span>
+                  Añadir número para recibir códigos{" "}
+                  <span className="whitespace-nowrap text-muted tabular-nums">(+{formatMxn(addon)} / 30 días)</span>
+                </span>
+              </label>
+              <button
+                type="button"
+                aria-label="¿Qué es el número para recibir códigos?"
+                aria-expanded={helpOpen}
+                aria-controls={`${uid}-addon-help`}
+                onClick={() => setHelpOpen((v) => !v)}
+                onBlur={() => setHelpOpen(false)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") setHelpOpen(false);
+                }}
+                data-testid="addon-help"
+                className="grid size-11 shrink-0 place-items-center rounded-full text-subtle hover:text-link"
+              >
+                <CircleHelp aria-hidden className="size-[18px]" />
+              </button>
+              <p
+                id={`${uid}-addon-help`}
+                role="tooltip"
+                hidden={!helpOpen}
+                className="absolute right-0 top-full z-10 -mt-1 w-64 max-w-[calc(100vw-3rem)] rounded-xl bg-fg px-3 py-2.5 text-[13px] leading-snug text-white shadow-raised"
+              >
+                Es un número móvil internacional para recibir códigos de verificación por SMS y llamadas. Los códigos
+                te llegan a tu panel de NovaPhone.
+              </p>
+            </div>
+          ) : null}
+
           {status === "soon" ? (
             <div className="flex flex-col gap-1 rounded-2xl border border-marigold/50 bg-marigold-soft p-4" role="status" data-testid="card-soon">
               <p className="font-semibold text-fg">{SOON_MESSAGE}</p>

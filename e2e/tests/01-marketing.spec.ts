@@ -8,7 +8,7 @@ test.describe("Sitio público", () => {
     await page.goto("/");
     await expect(page.getByRole("heading", { level: 1 })).toContainText("Internet para tu celular");
     await scrollThrough(page);
-    for (const text of ["Elige tus datos", "Cómo funciona", "Tu número para verificar apps", "compatible", "Preguntas frecuentes"]) {
+    for (const text of ["Elige tus datos", "Cómo funciona", "Lo que incluye tu cuenta", "compatible", "Preguntas frecuentes"]) {
       const el = page.getByText(text, { exact: false }).filter({ visible: true }).first();
       await el.scrollIntoViewIfNeeded();
       await expect(el).toBeVisible();

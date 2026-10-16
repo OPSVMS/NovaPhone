@@ -246,6 +246,11 @@ export const cardCheckouts = pgTable("card_checkouts", {
   flaggedAt: timestamp("flagged_at", { withTimezone: true }),
   flagReason: text("flag_reason"),
   refundedCents: integer("refunded_cents").notNull().default(0),
+  /** Número para recibir códigos agregado al checkout (`addNumber`): centavos cobrados por él (0 = sin número). */
+  numberCents: integer("number_cents").notNull().default(0),
+  /** pending → assigned (se pagó con el monedero) | refunded (79 de vuelta a la tarjeta) | failed (se quedó como saldo). */
+  numberStatus: text("number_status").$type<"pending" | "assigned" | "refunded" | "failed">(),
+  numberId: uuid("number_id").references(() => phoneNumbers.id),
   error: text("error"),
   paidAt: timestamp("paid_at", { withTimezone: true }),
   fulfilledAt: timestamp("fulfilled_at", { withTimezone: true }),
